@@ -7,16 +7,17 @@
 #include <queue>
 #include <tuple>
 #include <utility>
+#include "mpark/variant.hpp"
 
 template <class SignalT, class ... SlotArgTs>
 struct SignalDispatcher
 {
     typedef SignalT                                    signal_type;
     typedef std::function<void (SlotArgTs...)>         slot_type;
+    typedef std::tuple<SlotArgTs...>                   args_storage_type;
     typedef std::vector<slot_type>                     chain_type;
     typedef std::map<SignalT,
                      chain_type>                       map_type;
-    typedef std::tuple<SlotArgTs...>                   args_storage_type;
     typedef std::tuple<signal_type,
                        args_storage_type>              message_type;
     typedef std::queue<message_type>                   queue_type;
@@ -46,14 +47,13 @@ struct SignalDispatcher
     void message(const SignalT& signal,
                  SlotArgTs... args);
 
-    void poll(size_t limit = 0);
-    void poll(SignalT filter, size_t limit = 0);
+    bool poll(size_t limit = 0);
+    bool poll(SignalT filter, size_t limit = 0);
 
     void calloff(const SignalT& signal);
     void calloff(const SignalT& signal, size_t index);
 private:
     map_type map_;
-    std::vector<std::function<void()>> pre_, post_;
     queue_type message_queue_;
 };
 

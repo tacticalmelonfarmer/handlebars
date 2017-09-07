@@ -76,11 +76,9 @@ void SignalDispatcher<SignalT, SlotArgTs...>::message(const SignalT& signal, Slo
 }
 
 template <class SignalT, class ... SlotArgTs>
-void SignalDispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
+bool SignalDispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
 {
-    for(auto& f : pre_)
-        f();
-    if(message_queue_.size() == 0) return;
+    if(message_queue_.size() == 0) return false;
     if(limit == 0) limit = message_queue_.size();
     for(auto i=0; i<limit; i++)
     {
@@ -93,16 +91,13 @@ void SignalDispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
         }
         message_queue_.pop();
     }
-    for(auto& f : post_)
-        f();
+    return message_queue_.size() > 0;
 }
 
 template <class SignalT, class ... SlotArgTs>
-void SignalDispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
+bool SignalDispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
 {
-    for(auto& f : pre_)
-        f();
-    if(message_queue_.size() == 0) return;
+    if(message_queue_.size() == 0) return false;
     if(limit == 0) limit = message_queue_.size();
     size_t progress = 0;
     std::vector<decltype(message_queue_.begin())> found;
@@ -125,8 +120,7 @@ void SignalDispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
     {
         message_queue_.erase(d);
     }
-    for(auto& f : post_)
-        f();
+    return message_queue_.size() > 0;
 }
 
 template <class SignalT, class ... SlotArgTs>
