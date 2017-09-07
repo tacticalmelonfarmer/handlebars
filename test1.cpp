@@ -64,6 +64,7 @@ int main()
     disp1.message(signals::static_hosted, cmd_in);
     std::string ref_test = "hello";
     disp2.message(signals::modify, ref_test);
+    
     disp1.poll();
     disp2.poll();
 }
