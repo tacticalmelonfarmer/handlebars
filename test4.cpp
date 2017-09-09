@@ -47,6 +47,13 @@ static_assert( is_same< tl_push_front_test, typelist<int, double, int, bool, boo
 // testing: tl_back
 static_assert( is_same<tl_back<tl_typelist_test>::type, char>::value, "tl_back failed" );
 
+// testing: tuple and tl_apply
+typedef typelist<int, bool, const char*> tuple_tlist;
+typedef tl_apply<tuple, tuple_tlist>::type tuple_test;
+static_assert( is_same< bool, tl_get<1, tuple_tlist>::type >::value, "using tuple as typelist failed" );
+
 int main()
 {
+    tuple_test my_tuple(5, true, "hello");
+    std::cout << get<2>(my_tuple) << std::endl;
 }

@@ -1,9 +1,7 @@
 #pragma once
 #include <cstddef>
-#include <tuple>
 #include <type_traits>
 #include <utility>
-
 
 namespace utility
 {
@@ -32,6 +30,13 @@ decltype(auto) apply_tuple(F&& fn, Tuple&& t)
 	                        std::make_index_sequence<tSize>());
 }
 
+template <bool E>
+struct ct_require;
+
+template <>
+struct ct_require<true>
+{};
+
 template <bool E, typename T, typename F>
 struct ct_if_else
 {
@@ -44,7 +49,7 @@ struct ct_if_else<true, T, F>
 	typedef T type;
 };
 
-template <unsigned Index, typename ... Ts>
+template <size_t Index, typename ... Ts>
 struct ct_select;
 
 template <typename T, typename ... Ts>
@@ -53,52 +58,11 @@ struct ct_select<0, T, Ts...>
 	typedef T type;
 };
 
-
-template <unsigned Index, typename T, typename ... Ts>
+template <size_t Index, typename T, typename ... Ts>
 struct ct_select<Index, T, Ts...>
 {
 	typedef typename ct_select<Index - 1, Ts...>::type type;
 };
-
-/*template <unsigned Index, typename T, typename ... Ts>
-struct typelist_impl
-{
-	typedef T type;
-	enum { index = Index, begin = 0, end = 0 };
-	typedef typelist_impl<Index + 1, Ts...> next;
-};
-
-template <unsigned I, typename T>
-struct typelist_impl<I, T>
-{
-	typedef T type;
-	enum { index = I, begin = 0, end = 1 };
-};
-
-template <typename ... Ts>
-struct typelist;
-
-template <>
-struct typelist<>
-{
-	typedef void type;
-	enum { index = -1, begin = -1, end = -1, size = 0 };
-};
-
-template <typename T>
-struct typelist<T>
-{
-	typedef T type;
-	enum { index = 0, begin = 1, end = 1, size = 1 };
-};
-
-template <typename T, typename ... Ts>
-struct typelist<T, Ts...>
-{
-	typedef T type;
-	enum { index = 0, begin = 1, end = 0, size = sizeof...(Ts) + 1 };
-	typedef typelist_impl<1, Ts...> next;
-};*/
 
 template <typename ... Ts>
 struct typelist { enum{ size = sizeof...(Ts) }; };
@@ -130,10 +94,10 @@ struct tl_apply_after<ApplyTo, TL<TL_deduce...>, Pre...>
 	typedef ApplyTo<Pre..., TL_deduce...> type;
 };
 
-template <unsigned Index, typename TL>
+template <size_t Index, typename TL>
 struct tl_get;
 
-template <unsigned Index, template <typename...> typename TL, typename ... TL_deduce>
+template <size_t Index, template <typename...> typename TL, typename ... TL_deduce>
 struct tl_get<Index, TL<TL_deduce...>>
 {
 	typedef typename ct_select<Index, TL_deduce...>::type type;
@@ -169,7 +133,7 @@ struct tl_front
 	typedef typename TL::type type;
 };
 
-template <typename TL, unsigned Index, unsigned Size, /*-->ignore these parameters-->*/ bool Begin = true, typename ... Result>
+template <typename TL, size_t Index, size_t Size, /*-->ignore these parameters-->*/ bool Begin = true, typename ... Result>
 struct tl_subrange
 {
 	typedef typename
@@ -195,7 +159,7 @@ struct tl_join<TL1<TL1_deduce...>, TL2<TL2_deduce...>>
 	typedef typelist<TL1_deduce..., TL2_deduce...> type;
 };
 
-template <typename TLDest, unsigned Index, typename TLSource>
+template <typename TLDest, size_t Index, typename TLSource>
 struct tl_insert
 {
 	typedef typename tl_subrange<TLDest, 0, Index - 1>::type first_partition;
@@ -203,7 +167,7 @@ struct tl_insert
 	typedef typename tl_join<first_partition, typename tl_join<TLSource, last_partition>::type>::type type;
 };
 
-template <typename TLDest, unsigned Index, typename ... NewTypes>
+template <typename TLDest, size_t Index, typename ... NewTypes>
 struct tl_insert_t
 {
 	typedef typename tl_subrange<TLDest, 0, Index - 1>::type first_partition;
@@ -211,7 +175,7 @@ struct tl_insert_t
 	typedef typename tl_join<first_partition, typename tl_push_front<last_partition, NewTypes...>::type>::type type;
 };
 
-template <typename TL, unsigned Index>
+template <typename TL, size_t Index>
 struct tl_remove
 {
 	typedef typename tl_subrange<TL, 0, Index - 1>::type first_partition;
@@ -219,7 +183,7 @@ struct tl_remove
 	typedef typename tl_join<first_partition, last_partition>::type type;
 };
 
-template <typename TL, unsigned Index, unsigned Size>
+template <typename TL, size_t Index, size_t Size>
 struct tl_remove_subrange
 {
 	typedef typename tl_subrange<TL, 0, Index - 1>::type first_partition;
@@ -227,13 +191,13 @@ struct tl_remove_subrange
 	typedef typename tl_join<first_partition, last_partition>::type type;
 };
 
-template <typename TL, unsigned Size = 1>
+template <typename TL, size_t Size = 1>
 struct tl_pop_back
 {
 	typedef typename tl_subrange<TL, Size, TL::size - Size>::type type;
 };
 
-template <typename TL, unsigned Size = 1>
+template <typename TL, size_t Size = 1>
 struct tl_pop_front
 {
 	typedef typename tl_subrange<TL, (TL::size - 1) - Size, Size>::type type;
@@ -259,5 +223,66 @@ struct callsign<R(Ps...)>
 	typedef R (*pointer_type)(Ps...);
 };
 
+template <typename P, size_t Index, typename T, typename ... Ts>
+struct tuple_impl // body
+{
+	typedef T type;
+	typedef tuple_impl<tuple_impl<P, Index, T, Ts...>, Index + 1, Ts...> next_type;
+	typedef P previous_type;
+	enum { index = Index, begin = 0, end = 0 };
+	T value;
+	next_type *next;
+	previous_type *previous;
+
+	tuple_impl(previous_type* Previous, T Value, Ts... Others) : value(Value), next(new next_type(this, Others...)), previous(Previous) {}
+};
+
+template <typename P, size_t Index, typename T>
+struct tuple_impl<P, Index, T>  // tail
+{
+	typedef T type;
+	typedef P previous_type;
+	enum { index = Index, begin = 0, end = 1 };
+	T value;
+	previous_type *previous;
+
+	tuple_impl(previous_type* Previous, T Value) : value(Value), previous(Previous) {}
+};
+
+template <typename ... Ts>
+struct tuple; // head
+
+template <typename T>
+struct tuple<T> // single type, head body and tail
+{
+	typedef T type;
+	enum { index = 0, begin = 1, end = 1, size = 1 };
+	T  value;
+
+	tuple(T Value) : value(Value) {}
+};
+
+template <typename T, typename ... Ts>
+struct tuple<T, Ts...>
+{
+	typedef T type;
+	typedef tuple_impl<tuple<T, Ts...>, 1, Ts...> next_type;
+	enum { index = 0, begin = 1, end = 0, size = sizeof...(Ts) + 1 };
+	T value;
+	next_type *next;
+
+	tuple(T Value, Ts... Others) : value(Value), next(new next_type(this, Others...)) {}
+};
+
+template <size_t Index, typename Tuple>
+auto get(Tuple From)
+{
+	if constexpr(Tuple::index == Index)
+		return From.value;
+	else
+		return get<Index, typename Tuple::next_type>(*From.next);
+	}
 }
+
+
 
