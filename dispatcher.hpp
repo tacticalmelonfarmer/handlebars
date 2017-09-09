@@ -1,6 +1,4 @@
-#ifndef GAURD_EVENTS_HPP
-#define GAURD_EVENTS_HPP
-
+#pragma once
 #include <functional>
 #include <map>
 #include <vector>
@@ -9,8 +7,11 @@
 #include <utility>
 #include "mpark/variant.hpp"
 
+namespace events
+{
+
 template <class SignalT, class ... SlotArgTs>
-struct SignalDispatcher
+struct dispatcher
 {
     typedef SignalT                                    signal_type;
     typedef std::function<void (SlotArgTs...)>         slot_type;
@@ -57,6 +58,8 @@ private:
     queue_type message_queue_;
 };
 
+}
+
 // DISPATCH macro makes it easier to dispatch a signal to a member of an instance of a class type
 // syntactic sugar i guess.
 // example: "EASY_DISPATCH(signal, class_instance, id_of_member)" instead of "dispatch(signal, &class_instance, &decltype(class_instance)::id_of_member)"
@@ -70,5 +73,3 @@ private:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "dispatcher.ipp"
-
-#endif

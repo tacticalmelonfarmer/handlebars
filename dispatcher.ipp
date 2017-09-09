@@ -1,24 +1,27 @@
 #include "utility.hpp"
 
-template <class SignalT, class ... SlotArgTs>
-size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, const std::function<void()>& slot)
+namespace events
 {
-    if(map_.count(signal) == 0) map_[signal] = SignalDispatcher<SignalT, SlotArgTs...>::chain_type();
+
+template <class SignalT, class ... SlotArgTs>
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, const std::function<void()>& slot)
+{
+    if(map_.count(signal) == 0) map_[signal] = dispatcher<SignalT, SlotArgTs...>::chain_type();
     for(auto& f : map_[signal])
     {
-        if(getAddress(f) == getAddress(slot)) return 0;
+        if(utility::get_address(f) == utility::get_address(slot)) return 0;
     }
     map_[signal].push_back([slot](SlotArgTs... dummy){ slot(); });
     return map_[signal].size();
 }
 
 template <class SignalT, class ... SlotArgTs>
-size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, const typename SignalDispatcher<SignalT, SlotArgTs...>::slot_type& slot)
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, const typename dispatcher<SignalT, SlotArgTs...>::slot_type& slot)
 {
-    if(map_.count(signal) == 0) map_[signal] = SignalDispatcher<SignalT, SlotArgTs...>::chain_type();
+    if(map_.count(signal) == 0) map_[signal] = dispatcher<SignalT, SlotArgTs...>::chain_type();
     for(auto& f : map_[signal])
     {
-        if(getAddress(f) == getAddress(slot)) return 0;
+        if(utility::get_address(f) == utility::get_address(slot)) return 0;
     }
     map_[signal].push_back(slot);
     return map_[signal].size();
@@ -26,12 +29,12 @@ size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, 
 
 template <class SignalT, class ... SlotArgTs>
 template <class ClassT>
-size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)())
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)())
 {
-    if(map_.count(signal) == 0) map_[signal] = typename SignalDispatcher<SignalT, SlotArgTs...>::chain_type();
+    if(map_.count(signal) == 0) map_[signal] = typename dispatcher<SignalT, SlotArgTs...>::chain_type();
     for(auto& f : map_[signal])
     {
-        if(reinterpret_cast<size_t>(&slot) == getAddress(f)) return 0;
+        if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) return 0;
     }
     map_[signal].push_back([target, slot](SlotArgTs... dummy){ (target->*slot)(); });
     return map_[signal].size();
@@ -39,12 +42,12 @@ size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, 
 
 template <class SignalT, class ... SlotArgTs>
 template <class ClassT>
-size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...))
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...))
 {
-    if(map_.count(signal) == 0) map_[signal] = typename SignalDispatcher<SignalT, SlotArgTs...>::chain_type();
+    if(map_.count(signal) == 0) map_[signal] = typename dispatcher<SignalT, SlotArgTs...>::chain_type();
     for(auto& f : map_[signal])
     {
-        if(reinterpret_cast<size_t>(&slot) == getAddress(f)) return 0;
+        if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) return 0;
     }
     map_[signal].push_back([target, slot](SlotArgTs... args){ (target->*slot)(args...); });
     return map_[signal].size();
@@ -52,31 +55,31 @@ size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, 
 
 template <class SignalT, class ... SlotArgTs>
 template <class ClassT>
-size_t SignalDispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...))
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...))
 {
-    if(map_.count(signal) == 0) map_[signal] = typename SignalDispatcher<SignalT, SlotArgTs...>::chain_type();
+    if(map_.count(signal) == 0) map_[signal] = typename dispatcher<SignalT, SlotArgTs...>::chain_type();
     bool exists = false;
     for(auto& f : map_[signal])
     {
-        if(reinterpret_cast<size_t>(&slot) == getAddress(f)) exists = true;
+        if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) exists = true;
     }
     if(!exists) map_[signal].push_back(slot);
 }
 
 template <class SignalT, class ... SlotArgTs>
-void SignalDispatcher<SignalT, SlotArgTs...>::message(const SignalT& signal)
+void dispatcher<SignalT, SlotArgTs...>::message(const SignalT& signal)
 {
     message_queue_.push(std::make_tuple(signal, std::forward_as_tuple(SlotArgTs() ...)));
 }
 
 template <class SignalT, class ... SlotArgTs>
-void SignalDispatcher<SignalT, SlotArgTs...>::message(const SignalT& signal, SlotArgTs... args)
+void dispatcher<SignalT, SlotArgTs...>::message(const SignalT& signal, SlotArgTs... args)
 {
     message_queue_.push(std::make_tuple(signal, std::forward_as_tuple(args...)));
 }
 
 template <class SignalT, class ... SlotArgTs>
-bool SignalDispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
+bool dispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
 {
     if(message_queue_.size() == 0) return false;
     if(limit == 0) limit = message_queue_.size();
@@ -87,7 +90,7 @@ bool SignalDispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
         auto& args_tuple = std::get<1>(front);
         for(auto& slot : map_[signal]) // fire slot chain
         {
-            apply_tuple(slot, args_tuple);
+            utility::apply_tuple(slot, args_tuple);
         }
         message_queue_.pop();
     }
@@ -95,7 +98,7 @@ bool SignalDispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
 }
 
 template <class SignalT, class ... SlotArgTs>
-bool SignalDispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
+bool dispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
 {
     if(message_queue_.size() == 0) return false;
     if(limit == 0) limit = message_queue_.size();
@@ -109,7 +112,7 @@ bool SignalDispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
         {
             for(auto& slot : map_[filter]) // fire slot chain
             {
-                apply_tuple(slot, args_tuple);
+                utility::apply_tuple(slot, args_tuple);
             }
             found.push_back(iterator);
             ++progress;
@@ -124,15 +127,17 @@ bool SignalDispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
 }
 
 template <class SignalT, class ... SlotArgTs>
-void SignalDispatcher<SignalT,SlotArgTs...>::calloff(const SignalT& signal)
+void dispatcher<SignalT,SlotArgTs...>::calloff(const SignalT& signal)
 {
     if(map_.count(signal))
         map_.erase(signal);
 }
 
 template <class SignalT, class ... SlotArgTs>
-void SignalDispatcher<SignalT,SlotArgTs...>::calloff(const SignalT& signal, size_t index)
+void dispatcher<SignalT,SlotArgTs...>::calloff(const SignalT& signal, size_t index)
 {
     if(map_.count(signal) && map_[signal].size() > index)
         map_[signal].erase(index);
+}
+
 }

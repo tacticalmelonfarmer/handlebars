@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include "mpark/variant.hpp"
 
 enum class sig
 { push, nest, leave, reduce };
@@ -52,7 +53,7 @@ struct sig_handler
 
 int main()
 {
-    SignalDispatcher<sig, int, op> mgr;
+    events::dispatcher<sig, int, op> mgr;
     sig_handler handler;
 
     mgr.dispatch(sig::push, &handler, &sig_handler::push);

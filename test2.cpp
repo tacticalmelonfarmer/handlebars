@@ -21,7 +21,7 @@ struct entity
 
 int main()
 {
-    SignalDispatcher<sig, entity::var_t> disp;
+    events::dispatcher<sig, entity::var_t> disp;
     entity e({0,1,2,3,4,5});
     disp.HOSTED_DISPATCH(sig::inc, e, increment);
     disp.HOSTED_DISPATCH(sig::dec, e, decrement);

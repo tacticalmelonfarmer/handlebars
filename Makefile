@@ -100,17 +100,6 @@ list_install_components/fast: list_install_components
 
 .PHONY : list_install_components/fast
 
-# Special rule for the target edit_cache
-edit_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake cache editor..."
-	/usr/bin/cmake-gui -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
-.PHONY : edit_cache
-
-# Special rule for the target edit_cache
-edit_cache/fast: edit_cache
-
-.PHONY : edit_cache/fast
-
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
@@ -121,6 +110,17 @@ rebuild_cache:
 rebuild_cache/fast: rebuild_cache
 
 .PHONY : rebuild_cache/fast
+
+# Special rule for the target edit_cache
+edit_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake cache editor..."
+	/usr/bin/cmake-gui -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+.PHONY : edit_cache
+
+# Special rule for the target edit_cache
+edit_cache/fast: edit_cache
+
+.PHONY : edit_cache/fast
 
 # The main all target
 all: cmake_check_build_system
@@ -168,19 +168,6 @@ test2/fast:
 .PHONY : test2/fast
 
 #=============================================================================
-# Target rules for targets named dispatcher
-
-# Build rule for target.
-dispatcher: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 dispatcher
-.PHONY : dispatcher
-
-# fast build rule for target.
-dispatcher/fast:
-	$(MAKE) -f CMakeFiles/dispatcher.dir/build.make CMakeFiles/dispatcher.dir/build
-.PHONY : dispatcher/fast
-
-#=============================================================================
 # Target rules for targets named test1
 
 # Build rule for target.
@@ -205,6 +192,32 @@ test3: cmake_check_build_system
 test3/fast:
 	$(MAKE) -f CMakeFiles/test3.dir/build.make CMakeFiles/test3.dir/build
 .PHONY : test3/fast
+
+#=============================================================================
+# Target rules for targets named dispatcher
+
+# Build rule for target.
+dispatcher: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 dispatcher
+.PHONY : dispatcher
+
+# fast build rule for target.
+dispatcher/fast:
+	$(MAKE) -f CMakeFiles/dispatcher.dir/build.make CMakeFiles/dispatcher.dir/build
+.PHONY : dispatcher/fast
+
+#=============================================================================
+# Target rules for targets named test4
+
+# Build rule for target.
+test4: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 test4
+.PHONY : test4
+
+# fast build rule for target.
+test4/fast:
+	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/build
+.PHONY : test4/fast
 
 test1.o: test1.cpp.o
 
@@ -287,6 +300,33 @@ test3.cpp.s:
 	$(MAKE) -f CMakeFiles/test3.dir/build.make CMakeFiles/test3.dir/test3.cpp.s
 .PHONY : test3.cpp.s
 
+test4.o: test4.cpp.o
+
+.PHONY : test4.o
+
+# target to build an object file
+test4.cpp.o:
+	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/test4.cpp.o
+.PHONY : test4.cpp.o
+
+test4.i: test4.cpp.i
+
+.PHONY : test4.i
+
+# target to preprocess a source file
+test4.cpp.i:
+	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/test4.cpp.i
+.PHONY : test4.cpp.i
+
+test4.s: test4.cpp.s
+
+.PHONY : test4.s
+
+# target to generate assembly for a file
+test4.cpp.s:
+	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/test4.cpp.s
+.PHONY : test4.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -298,11 +338,12 @@ help:
 	@echo "... install"
 	@echo "... list_install_components"
 	@echo "... test2"
-	@echo "... dispatcher"
-	@echo "... edit_cache"
+	@echo "... rebuild_cache"
 	@echo "... test1"
 	@echo "... test3"
-	@echo "... rebuild_cache"
+	@echo "... dispatcher"
+	@echo "... test4"
+	@echo "... edit_cache"
 	@echo "... test1.o"
 	@echo "... test1.i"
 	@echo "... test1.s"
@@ -312,6 +353,9 @@ help:
 	@echo "... test3.o"
 	@echo "... test3.i"
 	@echo "... test3.s"
+	@echo "... test4.o"
+	@echo "... test4.i"
+	@echo "... test4.s"
 .PHONY : help
 
 

@@ -40,14 +40,14 @@ int main()
     slot_host host1("host1");
     slot_host host2("host2");
 
-    SignalDispatcher<signals, std::string> disp1;
+    events::dispatcher<signals, std::string> disp1;
     disp1.dispatch(signals::hello, &hello);
     disp1.dispatch(signals::busy, &busy);
     disp1.dispatch(signals::goodbye, &goodbye);
     disp1.HOSTED_DISPATCH(signals::hosted1, host1, member1);
     disp1.dispatch(signals::static_hosted, &static_host::member);
 
-    SignalDispatcher<signals, std::string&> disp2;
+    events::dispatcher<signals, std::string&> disp2;
     disp2.dispatch(signals::modify, &modify);
     disp2.HOSTED_DISPATCH(signals::hosted2, host2, member2);
 
