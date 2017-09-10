@@ -2,32 +2,20 @@
 #include <cstddef>
 #include <type_traits>
 #include <utility>
+#include <functional>
+#include <tuple>
 
 namespace utility
 {
+
+template <typename T>
+using uncvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
 template <typename R, typename ... ArgTs>
 size_t get_address(std::function<R(ArgTs...)> f) {
     typedef R (fnType)(ArgTs...);
     fnType ** fnPointer = f.template target<fnType*>();
     return (size_t) *fnPointer;
-}
-
-template <typename F, typename Tuple, size_t ...S >
-decltype(auto) apply_tuple_impl(F&& fn, Tuple&& t, std::index_sequence<S...>)
-{
-	return std::forward<F>(fn)(std::get<S>(std::forward<Tuple>(t))...);
-}
-
-template <typename F, typename Tuple>
-decltype(auto) apply_tuple(F&& fn, Tuple&& t)
-{
-	std::size_t constexpr tSize
-		= std::tuple_size<typename std::remove_reference<Tuple>::type>::value;
-
-	return apply_tuple_impl(std::forward<F>(fn),
-	                        std::forward<Tuple>(t),
-	                        std::make_index_sequence<tSize>());
 }
 
 template <bool E>
@@ -64,6 +52,17 @@ struct ct_select<Index, T, Ts...>
 	typedef typename ct_select<Index - 1, Ts...>::type type;
 };
 
+template <typename TL, size_t Size = 0>
+struct tl_max_size;
+
+template <template <typename...> typename TL, typename T_deduce, typename ... TL_deduce, size_t Size>
+struct tl_max_size<TL<T_deduce, TL_deduce...>, Size>
+{
+	static constexpr size_t current_size = sizeof(T_deduce);
+	static constexpr bool comparison = current_size > Size;
+	static constexpr size_t size = (TL<T_deduce, TL_deduce...>::end ? (comparison ? current_size : Size) : tl_max_size<TL<TL_deduce...>, (comparison ? current_size : Size)>::size);
+};
+
 template <typename ... Ts>
 struct typelist { enum{ size = sizeof...(Ts) }; };
 
@@ -95,11 +94,12 @@ struct tl_apply_after<ApplyTo, TL<TL_deduce...>, Pre...>
 };
 
 template <size_t Index, typename TL>
-struct tl_get;
+struct tl_type_at;
 
 template <size_t Index, template <typename...> typename TL, typename ... TL_deduce>
-struct tl_get<Index, TL<TL_deduce...>>
+struct tl_type_at<Index, TL<TL_deduce...>>
 {
+	static_assert(Index < TL<TL_deduce...>::size, "typelist index out of bounds");
 	typedef typename ct_select<Index, TL_deduce...>::type type;
 };
 
@@ -124,7 +124,7 @@ struct tl_push_front<TL<TL_deduce...>, NewTypes...>
 template <typename TL>
 struct tl_back
 {
-	typedef typename tl_get<TL::size - 1, TL>::type type;
+	typedef typename tl_type_at<TL::size - 1, TL>::type type;
 };
 
 template <typename TL>
@@ -139,7 +139,7 @@ struct tl_subrange
 	typedef typename
 	ct_if_else<
 		Begin,
-		typename tl_get<Index, TL>::new_typelist, // start with a zero index
+		typename tl_type_at<Index, TL>::new_typelist, // start with a zero index
 		TL
 	>::type iterator;
 	typedef typename
@@ -260,6 +260,7 @@ struct tuple<T> // single type, head body and tail
 	T  value;
 
 	tuple(T Value) : value(Value) {}
+	tuple() : value(T()) {}
 };
 
 template <typename T, typename ... Ts>
@@ -272,17 +273,91 @@ struct tuple<T, Ts...>
 	next_type *next;
 
 	tuple(T Value, Ts... Others) : value(Value), next(new next_type(this, Others...)) {}
+	tuple() : value(T()), next(new next_type(this, Ts()...)) {}
 };
 
+struct _tuple_index_out_of_bounds_ {} tuple_index_out_of_bounds;
+
 template <size_t Index, typename Tuple>
-auto get(Tuple From)
+auto& tuple_get(Tuple& From)
 {
 	if constexpr(Tuple::index == Index)
 		return From.value;
+	else if constexpr(!Tuple::end)
+		return tuple_get<Index/*, typename Tuple::next_type*/>(*From.next);
+	else 
+		return tuple_index_out_of_bounds;
+}
+
+template <typename F, typename Tuple, size_t ...S >
+decltype(auto) tuple_apply_impl(F&& fn, Tuple&& t, std::index_sequence<S...>)
+{
+	return std::forward<F>(fn)(tuple_get<S>(std::forward<Tuple>(t))...);
+}
+
+template <typename F, typename Tuple>
+decltype(auto) tuple_apply(F&& fn, Tuple&& t)
+{
+	std::size_t constexpr tSize = uncvref_t<Tuple>::size;
+
+	return tuple_apply_impl(std::forward<F>(fn),
+	                        std::forward<Tuple>(t),
+	                        std::make_index_sequence<tSize>());
+}
+
+template <typename F, typename Tuple, typename ReturnTuple, size_t Index>
+void tuple_foreach_impl(F&& func, Tuple&& tup, ReturnTuple& result)
+{
+	size_t constexpr tSize = uncvref_t<Tuple>::size;
+	if constexpr(Index < tSize)
+	{
+		tuple_get<Index>(result) = func(tuple_get<Index>(tup));
+		tuple_foreach_impl<F, Tuple, ReturnTuple, Index + 1>(std::forward<F>(func), std::forward<Tuple>(tup), result);
+	}
 	else
-		return get<Index, typename Tuple::next_type>(*From.next);
+	{
+		tuple_get<Index>(result) = func(tuple_get<Index>(tup));
 	}
 }
 
+template <typename F, typename Tuple, typename ReturnTuple = Tuple>
+ReturnTuple tuple_foreach(F&& func, Tuple&& tup)
+{
+	size_t constexpr tSize = uncvref_t<Tuple>::size;
+	size_t constexpr rtSize = uncvref_t<ReturnTuple>::size;
+	static_assert(tSize == rtSize, "Tuple must be same size as ReturnTuple");
 
+	uncvref_t<ReturnTuple> result;
+	tuple_get<0>(result) = func(tuple_get<0>(tup));
 
+	tuple_foreach_impl<F, Tuple, uncvref_t<ReturnTuple>, 1>(std::forward<F>(func), std::forward<Tuple>(tup), result);
+
+	return result;
+}
+
+template <typename F, typename Tuple, size_t Index>
+void tuple_foreach_noreturn_impl(F&& func, Tuple&& tup)
+{
+	size_t constexpr tSize = uncvref_t<Tuple>::size;
+	if constexpr(Index == tSize - 1)
+	{
+		func(tuple_get<Index>(tup));
+	}
+	else
+	{
+		func(tuple_get<Index>(tup));
+		tuple_foreach_noreturn_impl<F, Tuple, Index + 1>(std::forward<F>(func), std::forward<Tuple>(tup));
+	}
+}
+
+template <typename F, typename Tuple>
+void tuple_foreach_noreturn(F&& func, Tuple&& tup)
+{
+	size_t constexpr tSize = uncvref_t<Tuple>::size;
+
+	func(tuple_get<0>(tup));
+
+	tuple_foreach_noreturn_impl<F, Tuple, 1>(std::forward<F>(func), std::forward<Tuple>(tup));
+}
+
+}

@@ -1,0 +1,17 @@
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/install/strip.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/install/local.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/install.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/list_install_components.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test2.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/rebuild_cache.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test3.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test1.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test4.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/edit_cache.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test5.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/variant/CMakeFiles/install/strip.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/variant/CMakeFiles/edit_cache.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/variant/CMakeFiles/rebuild_cache.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/variant/CMakeFiles/list_install_components.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/variant/CMakeFiles/install/local.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/variant/CMakeFiles/install.dir

@@ -1,4 +1,5 @@
 #include "utility.hpp"
+#include <tuple>
 
 namespace events
 {
@@ -90,7 +91,7 @@ bool dispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
         auto& args_tuple = std::get<1>(front);
         for(auto& slot : map_[signal]) // fire slot chain
         {
-            utility::apply_tuple(slot, args_tuple);
+            std::apply(slot, args_tuple);
         }
         message_queue_.pop();
     }
@@ -112,7 +113,7 @@ bool dispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
         {
             for(auto& slot : map_[filter]) // fire slot chain
             {
-                utility::apply_tuple(slot, args_tuple);
+                std::apply(slot, args_tuple);
             }
             found.push_back(iterator);
             ++progress;

@@ -1,0 +1,1 @@
+/usr/bin/c++   --std=c++1z -O3 -DNDEBUG   CMakeFiles/test4.dir/test4.cpp.o  -o bin/test4 

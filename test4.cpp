@@ -1,4 +1,3 @@
-#include "dispatcher.hpp"
 #include "utility.hpp"
 #include <iostream>
 #include <functional>
@@ -29,10 +28,10 @@ static_assert( is_same<tl_applied_before_test<int, double, char, bool, char>, tl
 static_assert( is_same<ct_if_else<true, int, float>::type, int>::value, "ct_if_else failed" );
 static_assert( is_same<ct_if_else<false, int, float>::type, float>::value, "ct_if_else failed" );
 
-// testing: tl_get
-typedef typelist<char, signed, unsigned, float, double, std::function<void()>, bool> tl_get_test;
-typedef tl_get<3, tl_get_test>::type real;
-static_assert( is_same<real, float>::value, "tl_get failed" );
+// testing: tl_type_at
+typedef typelist<char, signed, unsigned, float, double, std::function<void()>, bool> tl_type_at_test;
+typedef tl_type_at<3, tl_type_at_test>::type real;
+static_assert( is_same<real, float>::value, "tl_type_at failed" );
 
 // testing: tl_push_back
 typedef typelist<int, bool, bool> tl_push_back_part;
@@ -50,10 +49,10 @@ static_assert( is_same<tl_back<tl_typelist_test>::type, char>::value, "tl_back f
 // testing: tuple and tl_apply
 typedef typelist<int, bool, const char*> tuple_tlist;
 typedef tl_apply<tuple, tuple_tlist>::type tuple_test;
-static_assert( is_same< bool, tl_get<1, tuple_tlist>::type >::value, "using tuple as typelist failed" );
+static_assert( is_same< bool, tl_type_at<1, tuple_tlist>::type >::value, "using tuple as typelist failed" );
 
 int main()
 {
     tuple_test my_tuple(5, true, "hello");
-    std::cout << get<2>(my_tuple) << std::endl;
+    std::cout << tuple_get<2>(my_tuple) << std::endl;
 }

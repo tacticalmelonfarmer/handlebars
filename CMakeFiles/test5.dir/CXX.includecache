@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/tacticalmelonfarmer/Desktop/ideas/events/test5.cpp
+utility.hpp
+/home/tacticalmelonfarmer/Desktop/ideas/events/utility.hpp
+chrono
+-
+iostream
+-
+
+/home/tacticalmelonfarmer/Desktop/ideas/events/utility.hpp
+cstddef
+-
+type_traits
+-
+utility
+-
+functional
+-
+tuple
+-
+
