@@ -1,2 +1,0 @@
-/usr/bin/ar qc bin/libdispatcher.a  
-/usr/bin/ranlib bin/libdispatcher.a
