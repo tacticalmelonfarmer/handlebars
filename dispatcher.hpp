@@ -5,7 +5,6 @@
 #include <queue>
 #include <tuple>
 #include <utility>
-#include "mpark/variant.hpp"
 
 namespace events
 {
