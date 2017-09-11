@@ -26,7 +26,10 @@ struct ct_require<true>
 {};
 
 template <bool E, typename T, typename F>
-struct ct_if_else
+struct ct_if_else;
+
+template <typename T, typename F>
+struct ct_if_else<false, T, F>
 {
 	typedef F type;
 };
@@ -50,6 +53,67 @@ template <size_t Index, typename T, typename ... Ts>
 struct ct_select<Index, T, Ts...>
 {
 	typedef typename ct_select<Index - 1, Ts...>::type type;
+};
+
+template <size_t ... Indices>
+struct ct_index_range { enum{ size = sizeof...(Indices) }; };
+
+template <size_t Begin, size_t End, size_t Position = 0, bool AddIndex = Begin == 0, bool AtEnd = Position == End, size_t ... Result>
+struct ct_make_index_range;
+
+template <size_t Begin, size_t End, size_t Position, size_t ... Result>
+struct ct_make_index_range<Begin, End, Position, /*AddIndex=*/false, /*AtEnd*/true, Result...>
+{
+	typedef ct_index_range<Result...> type;
+};
+
+template <size_t Begin, size_t End, size_t Position, size_t ... Result>
+struct ct_make_index_range<Begin, End, Position, /*AddIndex=*/true, /*AtEnd*/true, Result...>
+{
+	typedef ct_index_range<Result..., Position> type;
+};
+
+template <size_t Begin, size_t End, size_t Position, size_t ... Result>
+struct ct_make_index_range<Begin, End, Position, /*AddIndex=*/false, /*AtEnd*/false, Result...>
+{
+	static constexpr size_t add_next_index = Position + 1 >= Begin && Position + 1 <= End;
+	static constexpr size_t next_is_last = Position + 1 == End;
+	typedef typename ct_make_index_range<Begin, End, Position + 1, add_next_index, next_is_last, Result...>::type type;
+};
+
+template <size_t Begin, size_t End, size_t Position, size_t ... Result>
+struct ct_make_index_range<Begin, End, Position, /*AddIndex=*/true, /*AtEnd*/false, Result...>
+{
+	static constexpr size_t add_next_index = Position + 1 >= Begin && Position + 1 <= End;
+	static constexpr size_t next_is_last = Position + 1 == End;
+	typedef typename ct_make_index_range<Begin, End, Position + 1, add_next_index, next_is_last, Result..., Position>::type type;
+};
+
+template <size_t Begin, size_t End, size_t ... Result>
+struct ct_make_index_range<Begin, End, /*Position=*/0, /*AddIndex=*/false, /*AtEnd*/false, Result...>
+{
+	static constexpr size_t add_next_index = 1 >= Begin && 1 <= End;
+	static constexpr size_t next_is_last = 1 == End;
+	typedef typename ct_make_index_range<Begin, End, 1, add_next_index, next_is_last, Result...>::type type;
+};
+
+template <size_t Begin, size_t End, size_t ... Result>
+struct ct_make_index_range<Begin, End, /*Position=*/0, /*AddIndex=*/true, /*AtEnd*/false, Result...>
+{
+	static constexpr size_t add_next_index = 1 >= Begin && 1 <= End;
+	static constexpr size_t next_is_last = 1 == End;
+	typedef typename ct_make_index_range<Begin, End, 1, add_next_index, next_is_last, 0>::type type;
+};
+
+template <typename TL, size_t Size = 0>
+struct tl_min_size;
+
+template <template <typename...> typename TL, typename T_deduce, typename ... TL_deduce, size_t Size>
+struct tl_min_size<TL<T_deduce, TL_deduce...>, Size>
+{
+	static constexpr size_t current_size = sizeof(T_deduce);
+	static constexpr bool comparison = current_size < Size;
+	static constexpr size_t size = (TL<T_deduce, TL_deduce...>::end ? (comparison ? current_size : Size) : tl_min_size<TL<TL_deduce...>, (comparison ? current_size : Size)>::size);
 };
 
 template <typename TL, size_t Size = 0>
@@ -130,24 +194,56 @@ struct tl_back
 template <typename TL>
 struct tl_front
 {
-	typedef typename TL::type type;
+	typedef typename tl_type_at<0, TL>::type type;
 };
 
-template <typename TL, size_t Index, size_t Size, /*-->ignore these parameters-->*/ bool Begin = true, typename ... Result>
-struct tl_subrange
+template <typename TL, size_t Begin, size_t End, size_t Position = 0, bool AtEnd = false, bool AddType = (Begin == 0), typename ... Result>
+struct tl_subrange;
+
+template <typename TL, size_t Begin, size_t End, size_t Position, typename ... Result>
+struct tl_subrange<TL, Begin, End, Position, true, true, Result...> // end
 {
-	typedef typename
-	ct_if_else<
-		Begin,
-		typename tl_type_at<Index, TL>::new_typelist, // start with a zero index
-		TL
-	>::type iterator;
-	typedef typename
-	ct_if_else<
-		iterator::index == Size-1,
-		typelist<Result..., typename iterator::type>,
-		typename tl_subrange<typename iterator::next, Index, Size, false, Result..., typename iterator::type>::type
-	>::type type;
+	typedef typelist<Result..., typename tl_type_at<Position, TL>::type> type;
+};
+
+template <typename TL, size_t Begin, size_t End, size_t Position, typename ... Result>
+struct tl_subrange<TL, Begin, End, Position, true, false, Result...> // end
+{
+	typedef typelist<Result...> type;
+};
+
+template <typename TL, size_t Begin, size_t End, size_t Position, typename ... Result>
+struct tl_subrange<TL, Begin, End, Position, false, true, Result...>
+{
+	static constexpr bool add_next_type = Position + 1 >= Begin && Position + 1 <= End;
+	static constexpr bool next_is_last = Position + 1 == End;
+	typedef typename tl_subrange<TL, Begin, End, Position + 1, next_is_last, add_next_type, Result..., typename tl_type_at<Position, TL>::type>::type type;
+};
+
+template <typename TL, size_t Begin, size_t End, size_t Position, typename ... Result>
+struct tl_subrange<TL, Begin, End, Position, false, false, Result...>
+{
+	static constexpr bool add_next_type = Position + 1 >= Begin && Position + 1 <= End;
+	static constexpr bool next_is_last = Position + 1 == End;
+	typedef typename tl_subrange<TL, Begin, End, Position + 1, next_is_last, add_next_type, Result...>::type type;
+};
+
+template <typename TL, size_t Begin, size_t End, typename ... Result>
+struct tl_subrange<TL, Begin, End, 0, false, true, Result...> // entry add type
+{
+	static constexpr bool Position = 0;
+	static constexpr bool add_next_type = Begin <= 1;
+	static constexpr bool next_is_last = End == 1;
+	typedef typename tl_subrange<TL, Begin, End, Position + 1, next_is_last, add_next_type, typename tl_type_at<Position, TL>::type>::type type;
+};
+
+template <typename TL, size_t Begin, size_t End, typename ... Result>
+struct tl_subrange<TL, Begin, End, 0, false, false, Result...> // entry without adding type
+{
+	static constexpr bool Position = 0;
+	static constexpr bool add_next_type = Begin == 1;
+	static constexpr bool next_is_last = End == 1;
+	typedef typename tl_subrange<TL, Begin, End, Position + 1, next_is_last, add_next_type>::type type;
 };
 
 template <typename TL1, typename TL2>
@@ -309,19 +405,19 @@ template <typename F, typename Tuple, typename ReturnTuple, size_t Index>
 void tuple_foreach_impl(F&& func, Tuple&& tup, ReturnTuple& result)
 {
 	size_t constexpr tSize = uncvref_t<Tuple>::size;
-	if constexpr(Index < tSize)
+	if constexpr(Index == tSize - 1)
 	{
 		tuple_get<Index>(result) = func(tuple_get<Index>(tup));
-		tuple_foreach_impl<F, Tuple, ReturnTuple, Index + 1>(std::forward<F>(func), std::forward<Tuple>(tup), result);
 	}
 	else
 	{
 		tuple_get<Index>(result) = func(tuple_get<Index>(tup));
+		tuple_foreach_impl<F, Tuple, ReturnTuple, Index + 1>(std::forward<F>(func), std::forward<Tuple>(tup), result);
 	}
 }
 
 template <typename F, typename Tuple, typename ReturnTuple = Tuple>
-ReturnTuple tuple_foreach(F&& func, Tuple&& tup)
+uncvref_t<ReturnTuple> tuple_foreach(F&& func, Tuple&& tup)
 {
 	size_t constexpr tSize = uncvref_t<Tuple>::size;
 	size_t constexpr rtSize = uncvref_t<ReturnTuple>::size;
@@ -353,8 +449,6 @@ void tuple_foreach_noreturn_impl(F&& func, Tuple&& tup)
 template <typename F, typename Tuple>
 void tuple_foreach_noreturn(F&& func, Tuple&& tup)
 {
-	size_t constexpr tSize = uncvref_t<Tuple>::size;
-
 	func(tuple_get<0>(tup));
 
 	tuple_foreach_noreturn_impl<F, Tuple, 1>(std::forward<F>(func), std::forward<Tuple>(tup));
