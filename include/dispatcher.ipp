@@ -65,6 +65,7 @@ size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (
         if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) exists = true;
     }
     if(!exists) map_[signal].push_back(slot);
+    return map_[signal].size();
 }
 
 template <class SignalT, class ... SlotArgTs>
@@ -84,7 +85,7 @@ bool dispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
 {
     if(message_queue_.size() == 0) return false;
     if(limit == 0) limit = message_queue_.size();
-    for(auto i=0; i<limit; i++)
+    for(size_t i=0; i<limit; i++)
     {
         auto& front = message_queue_.front();
         auto& signal = std::get<0>(front);

@@ -111,30 +111,17 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named test2
+# Target rules for targets named typelist_test1
 
 # Build rule for target.
-test2: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 test2
-.PHONY : test2
+typelist_test1: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 typelist_test1
+.PHONY : typelist_test1
 
 # fast build rule for target.
-test2/fast:
-	$(MAKE) -f CMakeFiles/test2.dir/build.make CMakeFiles/test2.dir/build
-.PHONY : test2/fast
-
-#=============================================================================
-# Target rules for targets named test3
-
-# Build rule for target.
-test3: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 test3
-.PHONY : test3
-
-# fast build rule for target.
-test3/fast:
-	$(MAKE) -f CMakeFiles/test3.dir/build.make CMakeFiles/test3.dir/build
-.PHONY : test3/fast
+typelist_test1/fast:
+	$(MAKE) -f CMakeFiles/typelist_test1.dir/build.make CMakeFiles/typelist_test1.dir/build
+.PHONY : typelist_test1/fast
 
 #=============================================================================
 # Target rules for targets named test1
@@ -150,165 +137,98 @@ test1/fast:
 .PHONY : test1/fast
 
 #=============================================================================
-# Target rules for targets named test4
+# Target rules for targets named tuple_tes1
 
 # Build rule for target.
-test4: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 test4
-.PHONY : test4
+tuple_tes1: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 tuple_tes1
+.PHONY : tuple_tes1
 
 # fast build rule for target.
-test4/fast:
-	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/build
-.PHONY : test4/fast
+tuple_tes1/fast:
+	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/build
+.PHONY : tuple_tes1/fast
 
-#=============================================================================
-# Target rules for targets named test5
+tests/test1.o: tests/test1.cpp.o
 
-# Build rule for target.
-test5: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 test5
-.PHONY : test5
-
-# fast build rule for target.
-test5/fast:
-	$(MAKE) -f CMakeFiles/test5.dir/build.make CMakeFiles/test5.dir/build
-.PHONY : test5/fast
-
-test1.o: test1.cpp.o
-
-.PHONY : test1.o
+.PHONY : tests/test1.o
 
 # target to build an object file
-test1.cpp.o:
-	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/test1.cpp.o
-.PHONY : test1.cpp.o
+tests/test1.cpp.o:
+	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/tests/test1.cpp.o
+.PHONY : tests/test1.cpp.o
 
-test1.i: test1.cpp.i
+tests/test1.i: tests/test1.cpp.i
 
-.PHONY : test1.i
+.PHONY : tests/test1.i
 
 # target to preprocess a source file
-test1.cpp.i:
-	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/test1.cpp.i
-.PHONY : test1.cpp.i
+tests/test1.cpp.i:
+	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/tests/test1.cpp.i
+.PHONY : tests/test1.cpp.i
 
-test1.s: test1.cpp.s
+tests/test1.s: tests/test1.cpp.s
 
-.PHONY : test1.s
+.PHONY : tests/test1.s
 
 # target to generate assembly for a file
-test1.cpp.s:
-	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/test1.cpp.s
-.PHONY : test1.cpp.s
+tests/test1.cpp.s:
+	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/tests/test1.cpp.s
+.PHONY : tests/test1.cpp.s
 
-test2.o: test2.cpp.o
+tests/tuple_test1.o: tests/tuple_test1.cpp.o
 
-.PHONY : test2.o
+.PHONY : tests/tuple_test1.o
 
 # target to build an object file
-test2.cpp.o:
-	$(MAKE) -f CMakeFiles/test2.dir/build.make CMakeFiles/test2.dir/test2.cpp.o
-.PHONY : test2.cpp.o
+tests/tuple_test1.cpp.o:
+	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/tests/tuple_test1.cpp.o
+.PHONY : tests/tuple_test1.cpp.o
 
-test2.i: test2.cpp.i
+tests/tuple_test1.i: tests/tuple_test1.cpp.i
 
-.PHONY : test2.i
+.PHONY : tests/tuple_test1.i
 
 # target to preprocess a source file
-test2.cpp.i:
-	$(MAKE) -f CMakeFiles/test2.dir/build.make CMakeFiles/test2.dir/test2.cpp.i
-.PHONY : test2.cpp.i
+tests/tuple_test1.cpp.i:
+	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/tests/tuple_test1.cpp.i
+.PHONY : tests/tuple_test1.cpp.i
 
-test2.s: test2.cpp.s
+tests/tuple_test1.s: tests/tuple_test1.cpp.s
 
-.PHONY : test2.s
+.PHONY : tests/tuple_test1.s
 
 # target to generate assembly for a file
-test2.cpp.s:
-	$(MAKE) -f CMakeFiles/test2.dir/build.make CMakeFiles/test2.dir/test2.cpp.s
-.PHONY : test2.cpp.s
+tests/tuple_test1.cpp.s:
+	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/tests/tuple_test1.cpp.s
+.PHONY : tests/tuple_test1.cpp.s
 
-test3.o: test3.cpp.o
+tests/typelist_test1.o: tests/typelist_test1.cpp.o
 
-.PHONY : test3.o
+.PHONY : tests/typelist_test1.o
 
 # target to build an object file
-test3.cpp.o:
-	$(MAKE) -f CMakeFiles/test3.dir/build.make CMakeFiles/test3.dir/test3.cpp.o
-.PHONY : test3.cpp.o
+tests/typelist_test1.cpp.o:
+	$(MAKE) -f CMakeFiles/typelist_test1.dir/build.make CMakeFiles/typelist_test1.dir/tests/typelist_test1.cpp.o
+.PHONY : tests/typelist_test1.cpp.o
 
-test3.i: test3.cpp.i
+tests/typelist_test1.i: tests/typelist_test1.cpp.i
 
-.PHONY : test3.i
-
-# target to preprocess a source file
-test3.cpp.i:
-	$(MAKE) -f CMakeFiles/test3.dir/build.make CMakeFiles/test3.dir/test3.cpp.i
-.PHONY : test3.cpp.i
-
-test3.s: test3.cpp.s
-
-.PHONY : test3.s
-
-# target to generate assembly for a file
-test3.cpp.s:
-	$(MAKE) -f CMakeFiles/test3.dir/build.make CMakeFiles/test3.dir/test3.cpp.s
-.PHONY : test3.cpp.s
-
-test4.o: test4.cpp.o
-
-.PHONY : test4.o
-
-# target to build an object file
-test4.cpp.o:
-	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/test4.cpp.o
-.PHONY : test4.cpp.o
-
-test4.i: test4.cpp.i
-
-.PHONY : test4.i
+.PHONY : tests/typelist_test1.i
 
 # target to preprocess a source file
-test4.cpp.i:
-	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/test4.cpp.i
-.PHONY : test4.cpp.i
+tests/typelist_test1.cpp.i:
+	$(MAKE) -f CMakeFiles/typelist_test1.dir/build.make CMakeFiles/typelist_test1.dir/tests/typelist_test1.cpp.i
+.PHONY : tests/typelist_test1.cpp.i
 
-test4.s: test4.cpp.s
+tests/typelist_test1.s: tests/typelist_test1.cpp.s
 
-.PHONY : test4.s
-
-# target to generate assembly for a file
-test4.cpp.s:
-	$(MAKE) -f CMakeFiles/test4.dir/build.make CMakeFiles/test4.dir/test4.cpp.s
-.PHONY : test4.cpp.s
-
-test5.o: test5.cpp.o
-
-.PHONY : test5.o
-
-# target to build an object file
-test5.cpp.o:
-	$(MAKE) -f CMakeFiles/test5.dir/build.make CMakeFiles/test5.dir/test5.cpp.o
-.PHONY : test5.cpp.o
-
-test5.i: test5.cpp.i
-
-.PHONY : test5.i
-
-# target to preprocess a source file
-test5.cpp.i:
-	$(MAKE) -f CMakeFiles/test5.dir/build.make CMakeFiles/test5.dir/test5.cpp.i
-.PHONY : test5.cpp.i
-
-test5.s: test5.cpp.s
-
-.PHONY : test5.s
+.PHONY : tests/typelist_test1.s
 
 # target to generate assembly for a file
-test5.cpp.s:
-	$(MAKE) -f CMakeFiles/test5.dir/build.make CMakeFiles/test5.dir/test5.cpp.s
-.PHONY : test5.cpp.s
+tests/typelist_test1.cpp.s:
+	$(MAKE) -f CMakeFiles/typelist_test1.dir/build.make CMakeFiles/typelist_test1.dir/tests/typelist_test1.cpp.s
+.PHONY : tests/typelist_test1.cpp.s
 
 # Help Target
 help:
@@ -316,28 +236,20 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... test2"
 	@echo "... rebuild_cache"
-	@echo "... test3"
-	@echo "... test1"
-	@echo "... test4"
 	@echo "... edit_cache"
-	@echo "... test5"
-	@echo "... test1.o"
-	@echo "... test1.i"
-	@echo "... test1.s"
-	@echo "... test2.o"
-	@echo "... test2.i"
-	@echo "... test2.s"
-	@echo "... test3.o"
-	@echo "... test3.i"
-	@echo "... test3.s"
-	@echo "... test4.o"
-	@echo "... test4.i"
-	@echo "... test4.s"
-	@echo "... test5.o"
-	@echo "... test5.i"
-	@echo "... test5.s"
+	@echo "... typelist_test1"
+	@echo "... test1"
+	@echo "... tuple_tes1"
+	@echo "... tests/test1.o"
+	@echo "... tests/test1.i"
+	@echo "... tests/test1.s"
+	@echo "... tests/tuple_test1.o"
+	@echo "... tests/tuple_test1.i"
+	@echo "... tests/tuple_test1.s"
+	@echo "... tests/typelist_test1.o"
+	@echo "... tests/typelist_test1.i"
+	@echo "... tests/typelist_test1.s"
 .PHONY : help
 
 

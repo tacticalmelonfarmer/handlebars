@@ -1,11 +1,12 @@
 #include "utility.hpp"
+#include "typelist.hpp"
+#include "tuple.hpp"
 #include <iostream>
 #include <functional>
 #include <type_traits>
-#include <typeinfo>
-#include <string>
 
 using namespace utility;
+
 using std::is_same;
 
 // testing: tl_subrange
@@ -55,4 +56,6 @@ int main()
     tuple_apply(applied, my_tuple);
     auto return_tuple = tuple_foreach(printer(), my_tuple);
     tuple_foreach_noreturn([](auto& v){ std::cout << v << std::endl; }, return_tuple);
+
+    std::cout << tl_min_size<tuple_test>::size << "\t" << tl_max_size<tuple_test>::size << std::endl;
 }

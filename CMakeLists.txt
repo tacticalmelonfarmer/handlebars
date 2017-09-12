@@ -18,16 +18,15 @@ elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic")
 endif()
 
+set(PROJECT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/tests)
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
+include_directories(include)
+
 add_executable(test1 ${PROJECT_SOURCE_DIR}/test1.cpp)
 
-add_executable(test2 ${PROJECT_SOURCE_DIR}/test2.cpp)
+add_executable(tuple_tes1 ${PROJECT_SOURCE_DIR}/tuple_test1.cpp)
 
-add_executable(test3 ${PROJECT_SOURCE_DIR}/test3.cpp)
-
-add_executable(test4 ${PROJECT_SOURCE_DIR}/test4.cpp)
-
-add_executable(test5 ${PROJECT_SOURCE_DIR}/test5.cpp)
+add_executable(typelist_test1 ${PROJECT_SOURCE_DIR}/typelist_test1.cpp)
