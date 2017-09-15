@@ -124,6 +124,19 @@ typelist_test1/fast:
 .PHONY : typelist_test1/fast
 
 #=============================================================================
+# Target rules for targets named variant
+
+# Build rule for target.
+variant: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 variant
+.PHONY : variant
+
+# fast build rule for target.
+variant/fast:
+	$(MAKE) -f CMakeFiles/variant.dir/build.make CMakeFiles/variant.dir/build
+.PHONY : variant/fast
+
+#=============================================================================
 # Target rules for targets named test1
 
 # Build rule for target.
@@ -135,19 +148,6 @@ test1: cmake_check_build_system
 test1/fast:
 	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/build
 .PHONY : test1/fast
-
-#=============================================================================
-# Target rules for targets named tuple_tes1
-
-# Build rule for target.
-tuple_tes1: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 tuple_tes1
-.PHONY : tuple_tes1
-
-# fast build rule for target.
-tuple_tes1/fast:
-	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/build
-.PHONY : tuple_tes1/fast
 
 tests/test1.o: tests/test1.cpp.o
 
@@ -175,33 +175,6 @@ tests/test1.s: tests/test1.cpp.s
 tests/test1.cpp.s:
 	$(MAKE) -f CMakeFiles/test1.dir/build.make CMakeFiles/test1.dir/tests/test1.cpp.s
 .PHONY : tests/test1.cpp.s
-
-tests/tuple_test1.o: tests/tuple_test1.cpp.o
-
-.PHONY : tests/tuple_test1.o
-
-# target to build an object file
-tests/tuple_test1.cpp.o:
-	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/tests/tuple_test1.cpp.o
-.PHONY : tests/tuple_test1.cpp.o
-
-tests/tuple_test1.i: tests/tuple_test1.cpp.i
-
-.PHONY : tests/tuple_test1.i
-
-# target to preprocess a source file
-tests/tuple_test1.cpp.i:
-	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/tests/tuple_test1.cpp.i
-.PHONY : tests/tuple_test1.cpp.i
-
-tests/tuple_test1.s: tests/tuple_test1.cpp.s
-
-.PHONY : tests/tuple_test1.s
-
-# target to generate assembly for a file
-tests/tuple_test1.cpp.s:
-	$(MAKE) -f CMakeFiles/tuple_tes1.dir/build.make CMakeFiles/tuple_tes1.dir/tests/tuple_test1.cpp.s
-.PHONY : tests/tuple_test1.cpp.s
 
 tests/typelist_test1.o: tests/typelist_test1.cpp.o
 
@@ -239,14 +212,11 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
 	@echo "... typelist_test1"
+	@echo "... variant"
 	@echo "... test1"
-	@echo "... tuple_tes1"
 	@echo "... tests/test1.o"
 	@echo "... tests/test1.i"
 	@echo "... tests/test1.s"
-	@echo "... tests/tuple_test1.o"
-	@echo "... tests/tuple_test1.i"
-	@echo "... tests/tuple_test1.s"
 	@echo "... tests/typelist_test1.o"
 	@echo "... tests/typelist_test1.i"
 	@echo "... tests/typelist_test1.s"

@@ -204,7 +204,7 @@ template <typename TLDest, size_t Index, typename TLSource>
 struct tl_insert
 {
 	typedef typename tl_subrange<TLDest, 0, Index - 1>::type first_partition;
-	typedef typename tl_subrange<TLDest, Index, TLDest::size - first_partition::size - 1>::type last_partition;
+	typedef typename tl_subrange<TLDest, Index, TLDest::size - 1>::type last_partition;
 	typedef typename tl_join<first_partition, typename tl_join<TLSource, last_partition>::type>::type type;
 };
 
@@ -212,7 +212,7 @@ template <typename TLDest, size_t Index, typename ... NewTypes>
 struct tl_insert_t
 {
 	typedef typename tl_subrange<TLDest, 0, Index - 1>::type first_partition;
-	typedef typename tl_subrange<TLDest, Index, TLDest::size - first_partition::size>::type last_partition;
+	typedef typename tl_subrange<TLDest, Index, TLDest::size - 1>::type last_partition;
 	typedef typename tl_join<first_partition, typename tl_push_front<last_partition, NewTypes...>::type>::type type;
 };
 
@@ -220,28 +220,28 @@ template <typename TL, size_t Index>
 struct tl_remove
 {
 	typedef typename tl_subrange<TL, 0, Index - 1>::type first_partition;
-	typedef typename tl_subrange<TL, Index + 1, TL::size - first_partition::size>::type last_partition;
+	typedef typename tl_subrange<TL, Index + 1, TL::size - 1>::type last_partition;
 	typedef typename tl_join<first_partition, last_partition>::type type;
 };
 
-template <typename TL, size_t Index, size_t Size>
+template <typename TL, size_t Begin, size_t End>
 struct tl_remove_subrange
 {
-	typedef typename tl_subrange<TL, 0, Index - 1>::type first_partition;
-	typedef typename tl_subrange<TL, Index + Size, TL::size - first_partition::size>::type last_partition;
+	typedef typename tl_subrange<TL, 0, Begin - 1>::type first_partition;
+	typedef typename tl_subrange<TL, End + 1, TL::size - 1>::type last_partition;
 	typedef typename tl_join<first_partition, last_partition>::type type;
 };
 
 template <typename TL, size_t Size = 1>
 struct tl_pop_back
 {
-	typedef typename tl_subrange<TL, Size, TL::size - Size>::type type;
+	typedef typename tl_subrange<TL, 0, TL::size - 1 - Size>::type type;
 };
 
 template <typename TL, size_t Size = 1>
 struct tl_pop_front
 {
-	typedef typename tl_subrange<TL, (TL::size - 1) - Size, Size>::type type;
+	typedef typename tl_subrange<TL, Size,  TL::size - 1>::type type;
 };
 
 template <template <typename> typename ApplyTo, typename TL>
@@ -262,6 +262,54 @@ struct tl_callsign<R(Ps...)>
 	typedef R return_type;
 	typedef typelist<Ps...> param_types;
 	typedef R (*pointer_type)(Ps...);
+};
+
+template <typename F, typename TL>
+struct tl_has_type;
+
+template <typename F, template <typename> typename TL, typename T>
+struct tl_has_type<F, TL<T>>
+{
+	static constexpr bool value = std::is_same<F, T>::value;
+};
+
+template <typename F, template <typename...> typename TL, typename T, typename ... Ts>
+struct tl_has_type<F, TL<T, Ts...>>
+{
+	static constexpr bool value = std::is_same<F, T>::value || tl_has_type<F, TL<Ts...>>::value;
+};
+
+template <typename F, typename TL>
+struct tl_has_conversion;
+
+template <typename F, template <typename> typename TL, typename T>
+struct tl_has_conversion<F, TL<T>>
+{
+	static constexpr bool value = std::is_convertible<F, T>::value;
+};
+
+template <typename F, template <typename...> typename TL, typename T, typename ... Ts>
+struct tl_has_conversion<F, TL<T, Ts...>>
+{
+	static constexpr bool value = std::is_convertible<F, T>::value || tl_has_conversion<F, TL<Ts...>>::value;
+};
+
+template <typename F, typename TL>
+struct tl_find_conversion;
+
+template <typename F, template <typename> typename TL, typename T>
+struct tl_find_conversion<F, TL<T>>
+{
+	static constexpr bool valid_conversion = std::is_convertible<F, T>::value;
+	static_assert(valid_conversion, "could not find suitable a suitable conversion for F in typelist");
+	typedef T type;
+};
+
+template <typename F, template <typename...> typename TL, typename T, typename ... Ts>
+struct tl_find_conversion<F, TL<T, Ts...>>
+{
+	static constexpr bool valid_conversion = std::is_convertible<F, T>::value;
+	typedef typename ct_if_else</*If*/valid_conversion, /*Then*/T, /*Else*/typename tl_find_conversion<F, TL<Ts...>>::type>::type type;
 };
 
 }

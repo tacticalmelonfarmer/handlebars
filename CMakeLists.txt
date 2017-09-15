@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.7)
 
 project(events CXX)
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 
 #set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} --std=c++1z)
@@ -25,8 +25,10 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
 include_directories(include)
 
-add_executable(test1 ${PROJECT_SOURCE_DIR}/test1.cpp)
+add_library(variant include/variant.hpp)
+set_target_properties(variant PROPERTIES LINKER_LANGUAGE CXX)
+link_libraries(variant)
 
-add_executable(tuple_tes1 ${PROJECT_SOURCE_DIR}/tuple_test1.cpp)
+add_executable(test1 ${PROJECT_SOURCE_DIR}/test1.cpp)
 
 add_executable(typelist_test1 ${PROJECT_SOURCE_DIR}/typelist_test1.cpp)

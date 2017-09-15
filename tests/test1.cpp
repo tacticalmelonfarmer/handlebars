@@ -1,70 +1,49 @@
 #include "dispatcher.hpp"
+#include "typelist.hpp"
+#include <cstdint>
+#include "variant.hpp"
 #include <string>
 #include <iostream>
-#include <algorithm>
+#include <vector>
 
-enum class signals
-{ hello, busy, goodbye, hosted1, hosted2, static_hosted, modify };
+enum class ops
+{ reduce, parenthesis, exponent, multiply, divide, add, subtract, modulo };
 
-struct slot_host
+struct tokenizer
 {
-    std::string id;
-    slot_host(const std::string& Id) : id(Id)
+    std::string raw;
+    std::string::const_iterator position;
+    tokenizer(std::string& Input) : raw(Input), position(raw.begin()) {}
+    //std::string get() {}
+};
+
+struct calculator
+{
+    std::vector<std::vector<double>> data_nest;
+    std::vector<std::vector<ops>> ops_nest;
+    decltype(data_nest)::iterator data_stack;
+    decltype(ops_nest)::iterator ops_stack;
+    
+    void reduce()
     {}
-    void member1(std::string msg)
-    { std::cout << "\"" << msg << "\"" << " from " << id << ".member\n"; }
-    void member2(std::string& msg)
-    { std::sort(msg.begin(), msg.end()); std::cout << "\"" << msg << "\"" << " from " << id << ".member\n"; }
+    void parenthesis()
+    { data_nest.push_back({}); ops_nest.push_back({}); }
+    void exponent(double left, double right)
+    { data_stack->push_back(left); data_stack->push_back(right); }
+    void multiply()
+    {}
+    void divide()
+    {}
+    void add()
+    {}
+    void subtract()
+    {}
+    void modulo()
+    {}
+    calculator() {}
 };
-
-struct static_host
-{
-    static void member(const std::string& msg)
-    { std::cout << msg << " from static member function.\n"; }
-};
-
-void hello(std::string msg)
-{ std::cout << "hello " << msg << "\n"; }
-
-void busy(std::string msg)
-{ std::cout << "not now " << msg << " i'm busy...\n"; }
-
-void goodbye(std::string msg)
-{ std::cout << "i'm leaving, " << msg << ", i'll see ya l8r.\n"; }
-
-void modify(std::string& msg)
-{ std::sort(msg.begin(), msg.end()); std::cout << msg << std::endl; }
 
 int main()
 {
-    slot_host host1("host1");
-    slot_host host2("host2");
-
-    events::dispatcher<signals, std::string> disp1;
-    disp1.dispatch(signals::hello, &hello);
-    disp1.dispatch(signals::busy, &busy);
-    disp1.dispatch(signals::goodbye, &goodbye);
-    disp1.HOSTED_DISPATCH(signals::hosted1, host1, member1);
-    disp1.dispatch(signals::static_hosted, &static_host::member);
-
-    events::dispatcher<signals, std::string&> disp2;
-    disp2.dispatch(signals::modify, &modify);
-    disp2.HOSTED_DISPATCH(signals::hosted2, host2, member2);
-
-    
-    std::string cmd_in;
-    std::cout << "Enter yer name bud: \n";
-    std::cin >> cmd_in;
-
-    disp1.message(signals::hello, cmd_in);
-    disp1.message(signals::busy, cmd_in);
-    disp1.message(signals::goodbye, cmd_in);
-    disp1.message(signals::hosted1, cmd_in);
-    disp1.message(signals::hosted2, cmd_in);
-    disp1.message(signals::static_hosted, cmd_in);
-    std::string ref_test = "hello";
-    disp2.message(signals::modify, ref_test);
-    
-    disp1.poll();
-    disp2.poll();
+    return 0;
 }

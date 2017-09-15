@@ -11,6 +11,10 @@ namespace utility
 template <typename T>
 using uncvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
+template <typename T>
+inline const uncvref_t<T> lit(T v)
+{ return static_cast<const uncvref_t<T>>(v); }
+
 template <typename R, typename ... ArgTs>
 size_t get_address(std::function<R(ArgTs...)> f) {
     typedef R (fnType)(ArgTs...);

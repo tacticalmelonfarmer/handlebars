@@ -1,61 +1,25 @@
 #include "utility.hpp"
 #include "typelist.hpp"
-#include "tuple.hpp"
 #include <iostream>
-#include <functional>
 #include <type_traits>
 
 using namespace utility;
-
 using std::is_same;
 
-// testing: tl_subrange
-typedef typelist<char, bool, int[2], double*> tl_subrange_test;
-static_assert( is_same<tl_subrange<tl_subrange_test, 1, 2>::type, typelist<bool, int[2]>>::value, "tl_subrange failed" );
+struct custom_t {};
+template <typename ... Ts>
+struct apply_to {};
 
-// testing: tuple and tl_apply
-typedef typelist<int, bool, const char*> tuple_tlist;
-typedef tl_apply<tuple, tuple_tlist>::type tuple_test;
-static_assert( is_same< bool, tl_type_at<1, tuple_tlist>::type >::value, "using tuple as typelist failed" );
+typedef typelist<char, short, int, float, double, const char*, custom_t> tlist;
 
-// testing tuple and tl_subrange
-typedef tuple<int, bool, const char*> tuple_test;
-typedef tl_subrange<tuple_test, 1, 2>::type subtuple_type;
-static_assert( is_same<subtuple_type, typelist<bool, const char*>>::value, "tl_subrange failed" );
-
-struct printer
-{
-    int operator()(int v){std::cout << v << std::endl; return v*v;}
-    bool operator()(bool v){std::cout << v << std::endl; return !v;}
-    const char* operator()(const char* v){std::cout << v << std::endl; return "goodbye";}
-};
-
-typedef ct_make_index_range<3, 7>::type index_range;
-
-void print_index(){}
-template <typename T, typename ... Ts>
-void print_index(T&& v, Ts... nxt)
-{
-    std::cout << v << std::endl;
-    print_index(nxt...);
-}
-
-template <template <size_t...> typename IR, size_t ... Is>
-void print_indices(IR<Is...>&& range)
-{
-    print_index(Is...);
-}
-
-void applied(int i, bool b, const char* c) {}
+static_assert( is_same<typename tl_join<typelist<char, short, int, float>, typelist<double, const char*, custom_t>>::type, tlist>::value, "tl_join failed" );
+static_assert( is_same<typename tl_insert<typelist<char, short, const char*, custom_t>, 2, typelist<int, float, double>>::type, tlist>::value, "tl_insert failed" );
+static_assert( is_same<typename tl_insert_t<typelist<char, short, const char*, custom_t>, 2, int, float, double>::type, tlist>::value, "tl_insert_t failed" );
+static_assert( is_same<typename tl_remove<typelist<char, short, bool, int, float, double, const char*, custom_t>, 2>::type, tlist>::value, "tl_remove failed" );
+static_assert( is_same<typename tl_remove_subrange<typelist<char, short, bool, bool, bool, int, float, double, const char*, custom_t>, 2, 4>::type, tlist>::value, "tl_remove_subrange failed" );
+static_assert( is_same<typename tl_pop_back<typelist<char, short, int, float, double, const char*, custom_t, bool>>::type, tlist>::value, "tl_pop_back failed" );
+static_assert( is_same<typename tl_pop_front<typelist<bool, char, short, int, float, double, const char*, custom_t>>::type, tlist>::value, "tl_pop_front failed" );
 
 int main()
 {
-    // testing: tuple and ct_index_range and ct_make_index_range
-    print_indices(index_range());
-    tuple_test my_tuple(5, true, "hello");
-    tuple_apply(applied, my_tuple);
-    auto return_tuple = tuple_foreach(printer(), my_tuple);
-    tuple_foreach_noreturn([](auto& v){ std::cout << v << std::endl; }, return_tuple);
-
-    std::cout << tl_min_size<tuple_test>::size << "\t" << tl_max_size<tuple_test>::size << std::endl;
 }
