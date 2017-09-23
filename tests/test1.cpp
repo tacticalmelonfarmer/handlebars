@@ -1,49 +1,37 @@
 #include "dispatcher.hpp"
-#include "typelist.hpp"
-#include <cstdint>
 #include "variant.hpp"
+#include <cstdint>
 #include <string>
 #include <iostream>
 #include <vector>
 
+using utility::variant;
+
 enum class ops
 { reduce, parenthesis, exponent, multiply, divide, add, subtract, modulo };
 
+typedef variant<char, double> token;
+
 struct tokenizer
 {
-    std::string raw;
-    std::string::const_iterator position;
-    tokenizer(std::string& Input) : raw(Input), position(raw.begin()) {}
-    //std::string get() {}
-};
-
-struct calculator
-{
-    std::vector<std::vector<double>> data_nest;
-    std::vector<std::vector<ops>> ops_nest;
-    decltype(data_nest)::iterator data_stack;
-    decltype(ops_nest)::iterator ops_stack;
-    
-    void reduce()
-    {}
-    void parenthesis()
-    { data_nest.push_back({}); ops_nest.push_back({}); }
-    void exponent(double left, double right)
-    { data_stack->push_back(left); data_stack->push_back(right); }
-    void multiply()
-    {}
-    void divide()
-    {}
-    void add()
-    {}
-    void subtract()
-    {}
-    void modulo()
-    {}
-    calculator() {}
+    std::string input;
+    tokenizer(const std::string& Input) : input(Input) {}
+    token get() {}
 };
 
 int main()
 {
+    variant<bool, int, const char*> var[100];
+    int i = 0;
+    std::cout << sizeof(var[0]) << std::endl;
+    while(i+6 < 100)
+    {
+        var[i++] = true;
+        var[i++] = 21;
+        var[i++] = "hello";
+        var[i++] = false;
+        var[i++] = 42;
+        var[i++] = "goodbye";
+    }
     return 0;
 }

@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.7)
 
 project(events CXX)
-set(CMAKE_BUILD_TYPE Debug)
 
 #set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} --std=c++1z)
@@ -31,4 +30,4 @@ link_libraries(variant)
 
 add_executable(test1 ${PROJECT_SOURCE_DIR}/test1.cpp)
 
-add_executable(typelist_test1 ${PROJECT_SOURCE_DIR}/typelist_test1.cpp)
+add_executable(test2 ${PROJECT_SOURCE_DIR}/test2.cpp)

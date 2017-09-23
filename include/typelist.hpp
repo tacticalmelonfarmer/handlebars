@@ -253,11 +253,11 @@ struct tl_apply_callsign<ApplyTo, TL<R, Ps...>>
 	typedef ApplyTo<R(Ps...)> type;
 };
 
-template <typename S>
+template <typename TL>
 struct tl_callsign; //< callsign means function signature
 
-template <typename R, typename ... Ps>
-struct tl_callsign<R(Ps...)>
+template <template <typename...> typename TL, typename R, typename ... Ps>
+struct tl_callsign<TL<R, Ps...>>
 {
 	typedef R return_type;
 	typedef typelist<Ps...> param_types;

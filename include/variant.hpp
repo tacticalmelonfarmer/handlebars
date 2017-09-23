@@ -13,38 +13,24 @@ struct bad_variant_access : public std::runtime_error
 	bad_variant_access(const char* what) : std::runtime_error(what) {}
 };
 
-template <size_t Index, typename T, typename ... Ts>
+template <typename T>
+void delete_type(void* HeldPtr)
+{
+	if constexpr(std::is_reference<T>::value)
+		delete static_cast<uncvref_t<T>*>(HeldPtr);
+	else
+		delete static_cast<T*>(HeldPtr);
+}
+
+template <typename T, typename ... Ts>
 struct variant_deleter
 {
-	variant_deleter<Index + 1, Ts...> next;
-	inline void operator()(size_t HeldIndex, void* HeldPtr) const
-	{
-		if(Index == HeldIndex)
-		{
-			if constexpr(std::is_reference<T>::value)
-				delete static_cast<uncvref_t<T>*>(HeldPtr);
-			else
-				delete static_cast<T*>(HeldPtr);
-		}
-		else
-			next(HeldIndex, HeldPtr);
-	}
-};
+	static constexpr auto size = sizeof...(Ts) + 1;
+	static constexpr void (*deleters[size])(void*) = { &delete_type<T>, &delete_type<Ts>... };
 
-template <size_t Index, typename T>
-struct variant_deleter<Index, T>
-{
-	inline void operator()(size_t HeldIndex, void* HeldPtr) const
+	static inline void release(size_t HeldIndex, void* HeldPtr)
 	{
-		if(Index == HeldIndex)
-		{
-			if constexpr(std::is_reference<T>::value)
-				delete static_cast<uncvref_t<T>*>(HeldPtr);
-			else
-				delete static_cast<T*>(HeldPtr);
-		}
-		else
-			throw bad_variant_access("[warning/non-fatal]: attempted deletion of empty variant");
+		deleters[HeldIndex](HeldPtr);
 	}
 };
 
@@ -52,7 +38,7 @@ template <typename T, typename ... Ts>
 struct variant
 {
 	typedef typelist<T, Ts...> types;
-	typedef variant_deleter<0, T, Ts...> deleter_type;
+	typedef variant_deleter<T, Ts...> deleter_type;
 	static constexpr size_t invalid_index = sizeof...(Ts) + 1; // one past the last type
 
     variant()
@@ -64,7 +50,7 @@ struct variant
         , held_(tl_index_of<I, types>::index)
 	{}
 	~variant()
-	{ if(!empty()) variant<T, Ts...>::deleter_(held_, union_); }
+	{ if(!empty()) deleter_type::release(held_, union_); }
 
 	bool empty() const
 	{ return held_ == invalid_index; }
@@ -73,7 +59,7 @@ struct variant
 	{
 		if(!empty())
 		{
-			deleter_(held_, union_);
+			deleter_type::release(held_, union_);
 			held_ = invalid_index;
 		}
 	}
@@ -130,14 +116,29 @@ struct variant
 		else
 			throw bad_variant_access("variant is empty");
 	}
-	
+
 	template <typename G>
-	const G& get() const
-	{ return get<G>(); }
+    const G& get() const
+    {
+		if(!empty())
+		{
+			if(held_ == tl_index_of<G, types>::index)
+			{
+				if constexpr(std::is_reference<G>::value)
+					return **static_cast<uncvref_t<G>**>(union_);
+				else
+					return *static_cast<G*>(union_);
+			}
+			else
+				throw bad_variant_access("variant does not hold the requested type");
+				
+		}
+		else
+			throw bad_variant_access("variant is empty");
+	}
 private:
     void* union_;
 	size_t held_;
-	static constexpr deleter_type deleter_ = deleter_type();
 };
 
 }
