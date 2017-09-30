@@ -8,6 +8,22 @@
 namespace utility
 {
 
+// We want to prevent those darn implicit conversions between bools and pointers.
+//    and possibly some other issues.
+template <typename T>
+struct implicit_blocker
+{
+	typedef T type;
+	T value;
+	operator T&()
+	{
+		return value;
+	}
+private:
+	template <typename B>
+	operator B() {}
+};
+
 struct bad_variant_access : public std::runtime_error
 {
 	bad_variant_access(const char* what) : std::runtime_error(what) {}
@@ -71,9 +87,14 @@ struct variant
 	template <typename P>
 	variant<T, Ts...>& operator=(P&& rhs)
 	{
-		clear();
 		if constexpr(tl_has_type<P, types>::value)
 		{
+			if(tl_index_of<P, types>::index == held_) // dont destroy union_ if unneccesary
+			{
+				*static_cast<P*>(union_) = rhs;
+				return *this;
+			}
+			clear();
 			if constexpr(std::is_reference<P>::value)
 			{
 				union_ = new uncvref_t<P>*(&rhs);
@@ -87,6 +108,7 @@ struct variant
 		}
 		else if constexpr(tl_has_conversion<P, types>::value)
 		{
+			clear();
 			union_ = new typename tl_find_conversion<P, types>::type(rhs);
 			held_ = tl_index_of<typename tl_find_conversion<P, types>::type, types>::index;
 		}
@@ -141,4 +163,8 @@ private:
 	size_t held_;
 };
 
+template <typename T>
+uncvref_t<T> lit(T r)
+{
+	return uncvref_t<T>(r);}
 }

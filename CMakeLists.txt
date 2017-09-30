@@ -1,33 +1,26 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(events CXX)
+project(events)
 
-#set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} --std=c++1z)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_library(variant STATIC include/variant.hpp include/typelist.hpp)
+set_target_properties(variant PROPERTIES LINKER_LANGUAGE CXX)
+
+add_executable(test1 tests/test1.cpp)
+target_include_directories(test1 PRIVATE include)
+target_link_libraries(test1 PRIVATE variant)
+
+add_executable(test2 tests/test2.cpp)
+target_include_directories(test2 PRIVATE include)
+target_link_libraries(test2 PRIVATE variant)
 
 if(MSVC)
-    if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-        string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    else()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-    endif()
-elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic")
+    target_compile_options(test1 PRIVATE "/std:c++17")
+    target_compile_options(test2 PRIVATE "/std:c++17")
+elseif(CMAKE_COMPILER_IS_GNUCXX)
+    target_compile_options(test1 PRIVATE "-std=c++1z")
+    target_compile_options(test2 PRIVATE "-std=c++1z")
 endif()
-
-set(PROJECT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/tests)
-set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin)
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
-set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
-
-include_directories(include)
-
-add_library(variant include/variant.hpp)
-set_target_properties(variant PROPERTIES LINKER_LANGUAGE CXX)
-link_libraries(variant)
-
-add_executable(test1 ${PROJECT_SOURCE_DIR}/test1.cpp)
-
-add_executable(test2 ${PROJECT_SOURCE_DIR}/test2.cpp)

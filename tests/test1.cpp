@@ -21,17 +21,5 @@ struct tokenizer
 
 int main()
 {
-    variant<bool, int, const char*> var[100];
-    int i = 0;
-    std::cout << sizeof(var[0]) << std::endl;
-    while(i+6 < 100)
-    {
-        var[i++] = true;
-        var[i++] = 21;
-        var[i++] = "hello";
-        var[i++] = false;
-        var[i++] = 42;
-        var[i++] = "goodbye";
-    }
     return 0;
 }

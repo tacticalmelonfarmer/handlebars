@@ -270,13 +270,13 @@ struct tl_has_type;
 template <typename F, template <typename> typename TL, typename T>
 struct tl_has_type<F, TL<T>>
 {
-	static constexpr bool value = std::is_same<F, T>::value;
+	static constexpr bool value = std::is_same<F, T>::value && sizeof(F) == sizeof(T);
 };
 
 template <typename F, template <typename...> typename TL, typename T, typename ... Ts>
 struct tl_has_type<F, TL<T, Ts...>>
 {
-	static constexpr bool value = std::is_same<F, T>::value || tl_has_type<F, TL<Ts...>>::value;
+	static constexpr bool value = (std::is_same<F, T>::value && sizeof(F) == sizeof(T)) || tl_has_type<F, TL<Ts...>>::value;
 };
 
 template <typename F, typename TL>
