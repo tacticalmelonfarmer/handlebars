@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/test1.dir/tests/test1.cpp.o  -o build/bin/test1 build/lib/libvariant.a 
