@@ -1,0 +1,105 @@
+{
+  "variant": {
+    "label": "Release",
+    "keywordSettings": {
+      "buildType": "release"
+    },
+    "description": "Enable optimizations, omit debug info"
+  },
+  "activeEnvironments": [],
+  "codeModel": {
+    "configurations": [
+      {
+        "name": "Release",
+        "projects": [
+          {
+            "buildDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events/build",
+            "name": "events",
+            "sourceDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events",
+            "targets": [
+              {
+                "artifacts": [
+                  "/home/tacticalmelonfarmer/Desktop/ideas/events/build/build/bin/test1"
+                ],
+                "buildDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": "-O3 -DNDEBUG   -std=c++1z",
+                    "includePath": [
+                      {
+                        "path": "/home/tacticalmelonfarmer/Desktop/ideas/events/include"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "tests/test1.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "test1",
+                "linkLanguageFlags": "-O3 -DNDEBUG",
+                "linkLibraries": "build/lib/libvariant.a",
+                "linkerLanguage": "CXX",
+                "name": "test1",
+                "sourceDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events",
+                "type": "EXECUTABLE"
+              },
+              {
+                "artifacts": [
+                  "/home/tacticalmelonfarmer/Desktop/ideas/events/build/build/lib/libvariant.a"
+                ],
+                "buildDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events/build",
+                "fileGroups": [
+                  {
+                    "isGenerated": false,
+                    "sources": [
+                      "include/variant.hpp",
+                      "include/typelist.hpp"
+                    ]
+                  }
+                ],
+                "fullName": "libvariant.a",
+                "linkerLanguage": "CXX",
+                "name": "variant",
+                "sourceDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events",
+                "type": "STATIC_LIBRARY"
+              },
+              {
+                "artifacts": [
+                  "/home/tacticalmelonfarmer/Desktop/ideas/events/build/build/bin/test2"
+                ],
+                "buildDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": "-O3 -DNDEBUG   -std=c++1z",
+                    "includePath": [
+                      {
+                        "path": "/home/tacticalmelonfarmer/Desktop/ideas/events/include"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "tests/test2.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "test2",
+                "linkLanguageFlags": "-O3 -DNDEBUG",
+                "linkLibraries": "build/lib/libvariant.a",
+                "linkerLanguage": "CXX",
+                "name": "test2",
+                "sourceDirectory": "/home/tacticalmelonfarmer/Desktop/ideas/events",
+                "type": "EXECUTABLE"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "cookie": "0.10808041424259329",
+    "inReplyTo": "codemodel",
+    "type": "reply"
+  }
+}

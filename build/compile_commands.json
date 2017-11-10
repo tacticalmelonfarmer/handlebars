@@ -1,0 +1,12 @@
+[
+{
+  "directory": "/home/tacticalmelonfarmer/Desktop/ideas/events/build",
+  "command": "/usr/bin/c++    -I/home/tacticalmelonfarmer/Desktop/ideas/events/include  -O3 -DNDEBUG   -std=c++1z -o CMakeFiles/test2.dir/tests/test2.cpp.o -c /home/tacticalmelonfarmer/Desktop/ideas/events/tests/test2.cpp",
+  "file": "/home/tacticalmelonfarmer/Desktop/ideas/events/tests/test2.cpp"
+},
+{
+  "directory": "/home/tacticalmelonfarmer/Desktop/ideas/events/build",
+  "command": "/usr/bin/c++    -I/home/tacticalmelonfarmer/Desktop/ideas/events/include  -O3 -DNDEBUG   -std=c++1z -o CMakeFiles/test1.dir/tests/test1.cpp.o -c /home/tacticalmelonfarmer/Desktop/ideas/events/tests/test1.cpp",
+  "file": "/home/tacticalmelonfarmer/Desktop/ideas/events/tests/test1.cpp"
+}
+]

@@ -1,0 +1,2 @@
+/usr/bin/ar qc build/lib/libvariant.a  
+/usr/bin/ranlib build/lib/libvariant.a

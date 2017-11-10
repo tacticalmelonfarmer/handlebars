@@ -1,0 +1,1 @@
+/usr/bin/c++   -O3 -DNDEBUG   CMakeFiles/test2.dir/tests/test2.cpp.o  -o build/bin/test2 build/lib/libvariant.a 

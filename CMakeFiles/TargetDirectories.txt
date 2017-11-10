@@ -1,0 +1,5 @@
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/rebuild_cache.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/edit_cache.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test2.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/variant.dir
+/home/tacticalmelonfarmer/Desktop/ideas/events/CMakeFiles/test1.dir
