@@ -1,4 +1,6 @@
-#pragma once
+#ifndef DISPATCHER_HPP_GAURD
+#define DISPATCHER_HPP_GAURD
+
 #include <functional>
 #include <map>
 #include <vector>
@@ -17,51 +19,58 @@ struct dispatcher
     typedef std::tuple<SlotArgTs...>                   args_storage_type;
     typedef std::vector<slot_type>                     chain_type;
     typedef std::map<SignalT, chain_type>              map_type;
-    typedef std::tuple<signal_type, args_storage_type> message_type;
-    typedef std::queue<message_type>                   queue_type;
+    typedef std::tuple<signal_type, args_storage_type> event_type;
+    typedef std::queue<event_type>                     event_queue_type;
 
     // connect a signal to a function object
-    size_t dispatch(const SignalT& signal, const slot_type& slot);
+    static size_t dispatch(const SignalT& signal, const slot_type& slot);
 
     // connect a signal to a dynamic/instance member function object
     template <class ClassT>
-    size_t dispatch(const SignalT& signal, const ClassT* target, void (ClassT::*slot)(SlotArgTs...));
+    static size_t dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...));
 
-    // connect a signal to a static member function object
+    // connect a signal to a member function object
     template <class ClassT>
-    size_t dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...));
+    static size_t dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...));
 
-    // push a signal and associated arguments onto the message queue
-    void message(const SignalT& signal, SlotArgTs... args);
+    // push a signal and associated arguments onto the event queue
+    static void event(const SignalT& signal, SlotArgTs... args);
 
-    // pull #(limit) messages from the queue and handle them
-    bool poll(size_t limit = 0);
-    // poll only messages with the specified signal "filter" up to #(limit)
-    bool poll(SignalT filter, size_t limit = 0);
+    // pull #(limit) events from the queue and handle them
+    static bool poll(size_t limit = 0);
+    // poll only events with the specified signal "filter" up to #(limit)
+    static bool poll(SignalT filter, size_t limit = 0);
 
     // remove all handler functions (slot chain) which map to "signal"
-    void calloff(const SignalT& signal);
+    static void calloff(const SignalT& signal);
     // remove 1 handler function (slot), indicated by "index", from the chain which maps to "signal"
-    void calloff(const SignalT& signal, size_t index);
+    static void calloff(const SignalT& signal, size_t index);
 private:
-    map_type map_;
-    queue_type message_queue_;
+    static map_type map_;
+    static event_queue_type event_queue_;
 };
+
+template <class SignalT, class ... SlotArgTs>
+typename dispatcher<SignalT, SlotArgTs...>::map_type dispatcher<SignalT, SlotArgTs...>::map_ = {};
+
+template <class SignalT, class ... SlotArgTs>
+typename dispatcher<SignalT, SlotArgTs...>::event_queue_type dispatcher<SignalT, SlotArgTs...>::event_queue_ = {};
 
 }
 
 // DISPATCH macro makes it easier to dispatch a signal to a member of an instance of a class type
 // syntactic sugar i guess.
 // example: "EASY_DISPATCH(signal, class_instance, id_of_member)" instead of "dispatch(signal, &class_instance, &decltype(class_instance)::id_of_member)"
-#define HOSTED_DISPATCH(signal, object, member) dispatch(signal, & object, & decltype(object)::member)
+#define DISPATCH(signal, object, member) dispatch(signal, & object, & decltype(object)::member)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "utility.hpp"
+#include <events/utility.hpp>
 #include <tuple>
+#include <iostream>
 
 namespace events
 {
@@ -69,75 +78,64 @@ namespace events
 template <class SignalT, class ... SlotArgTs>
 size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, const typename dispatcher<SignalT, SlotArgTs...>::slot_type& slot)
 {
-    if(map_.count(signal) == 0) map_[signal] = dispatcher<SignalT, SlotArgTs...>::chain_type();
-    for(auto& f : map_[signal])
-    {
-        if(utility::get_address(f) == utility::get_address(slot)) return 0;
-    }
     map_[signal].push_back(slot);
-    return map_[signal].size();
+    return map_[signal].size() - 1;
 }
 
 template <class SignalT, class ... SlotArgTs>
 template <class ClassT>
-size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, const ClassT* target, void (ClassT::*slot)(SlotArgTs...))
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...))
 {
-    if(map_.count(signal) == 0) map_[signal] = typename dispatcher<SignalT, SlotArgTs...>::chain_type();
-    for(auto& f : map_[signal])
-    {
-        if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) return 0;
-    }
     map_[signal].push_back([target, slot](SlotArgTs... args){ (target->*slot)(args...); });
-    return map_[signal].size();
+    return map_[signal].size() - 1;
 }
 
 template <class SignalT, class ... SlotArgTs>
 template <class ClassT>
 size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...))
 {
-    if(map_.count(signal) == 0) map_[signal] = typename dispatcher<SignalT, SlotArgTs...>::chain_type();
     bool exists = false;
     for(auto& f : map_[signal])
     {
         if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) exists = true;
     }
     if(!exists) map_[signal].push_back(slot);
-    return map_[signal].size();
+    return map_[signal].size() - 1;
 }
 
 template <class SignalT, class ... SlotArgTs>
-void dispatcher<SignalT, SlotArgTs...>::message(const SignalT& signal, SlotArgTs... args)
+void dispatcher<SignalT, SlotArgTs...>::event(const SignalT& signal, SlotArgTs... args)
 {
-    message_queue_.push(std::make_tuple(signal, std::forward_as_tuple(args...)));
+    event_queue_.push(std::make_tuple(signal, std::forward_as_tuple(args...)));
 }
 
 template <class SignalT, class ... SlotArgTs>
 bool dispatcher<SignalT, SlotArgTs...>::poll(size_t limit)
 {
-    if(message_queue_.size() == 0) return false;
-    if(limit == 0) limit = message_queue_.size();
+    if(event_queue_.size() == 0) return false;
+    if(limit == 0) limit = event_queue_.size();
     for(size_t i=0; i<limit; i++)
     {
-        auto& front = message_queue_.front();
+        auto& front = event_queue_.front();
         auto& signal = std::get<0>(front);
         auto& args_tuple = std::get<1>(front);
         for(auto& slot : map_[signal]) // fire slot chain
         {
             std::apply(slot, args_tuple);
         }
-        message_queue_.pop();
+        event_queue_.pop();
     }
-    return message_queue_.size() > 0;
+    return event_queue_.size() > 0;
 }
 
 template <class SignalT, class ... SlotArgTs>
 bool dispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
 {
-    if(message_queue_.size() == 0) return false;
-    if(limit == 0) limit = message_queue_.size();
+    if(event_queue_.size() == 0) return false;
+    if(limit == 0) limit = event_queue_.size();
     size_t progress = 0;
-    std::vector<decltype(message_queue_.begin())> found;
-    for(auto iterator = message_queue_.begin(); iterator != message_queue_.end(); iterator++)
+    std::vector<decltype(event_queue_.begin())> found;
+    for(auto iterator = event_queue_.begin(); iterator != event_queue_.end(); iterator++)
     {
         auto& signal = std::get<0>(*iterator);
         auto& args_tuple = std::get<1>(*iterator);
@@ -154,9 +152,9 @@ bool dispatcher<SignalT,SlotArgTs...>::poll(SignalT filter, size_t limit)
     }
     for(auto& d : found)
     {
-        message_queue_.erase(d);
+        event_queue_.erase(d);
     }
-    return message_queue_.size() > 0;
+    return event_queue_.size() > 0;
 }
 
 template <class SignalT, class ... SlotArgTs>
@@ -170,7 +168,9 @@ template <class SignalT, class ... SlotArgTs>
 void dispatcher<SignalT,SlotArgTs...>::calloff(const SignalT& signal, size_t index)
 {
     if(map_.count(signal) && map_[signal].size() > index)
-        map_[signal].erase(index);
+        map_[signal].erase(map_[signal].begin() + index);
 }
 
 }
+
+#endif
