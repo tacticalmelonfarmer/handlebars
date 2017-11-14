@@ -11,9 +11,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BUILD_TREE}/bin)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-#add_library(dispatcher INTERFACE)
-#set_target_properties(dispatcher PROPERTIES LINKER_LANGUAGE CXX)
-
 add_executable(dispatch_use example/dispatch_use.cpp)
 target_link_libraries(dispatch_use ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(dispatch_use PUBLIC cxx_std_17)

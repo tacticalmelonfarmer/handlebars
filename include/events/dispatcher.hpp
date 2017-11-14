@@ -2,7 +2,7 @@
 #define DISPATCHER_HPP_GAURD
 
 #include <functional>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <queue>
 #include <tuple>
@@ -18,33 +18,40 @@ struct dispatcher
     typedef std::function<void (SlotArgTs...)>         slot_type;
     typedef std::tuple<SlotArgTs...>                   args_storage_type;
     typedef std::vector<slot_type>                     chain_type;
-    typedef std::map<SignalT, chain_type>              map_type;
+    typedef std::unordered_map<SignalT, chain_type>    map_type;
     typedef std::tuple<signal_type, args_storage_type> event_type;
     typedef std::queue<event_type>                     event_queue_type;
 
-    // connect a signal to a function object
     static size_t dispatch(const SignalT& signal, const slot_type& slot);
 
-    // connect a signal to a dynamic/instance member function object
     template <class ClassT>
     static size_t dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...));
 
-    // connect a signal to a member function object
     template <class ClassT>
     static size_t dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...));
 
-    // push a signal and associated arguments onto the event queue
+    template <class ... ArgTs>
+    static size_t dispatch_bind(const SignalT& signal, const std::function<void(ArgTs..., SlotArgTs...)>& slot, ArgTs... args);
+
+    template <class ClassT, class ... ArgTs>
+    static size_t dispatch_bind(const SignalT& signal, ClassT* target, void (ClassT::*slot)(ArgTs..., SlotArgTs...), ArgTs... args);
+
+    template <class ClassT, class ... ArgTs>
+    static size_t dispatch_bind(const SignalT& signal, void (ClassT::*slot)(ArgTs..., SlotArgTs...), ArgTs... args);
+
     static void event(const SignalT& signal, SlotArgTs... args);
 
-    // pull #(limit) events from the queue and handle them
     static bool poll(size_t limit = 0);
-    // poll only events with the specified signal "filter" up to #(limit)
+
     static bool poll(SignalT filter, size_t limit = 0);
 
     // remove all handler functions (slot chain) which map to "signal"
     static void calloff(const SignalT& signal);
     // remove 1 handler function (slot), indicated by "index", from the chain which maps to "signal"
     static void calloff(const SignalT& signal, size_t index);
+
+    // remove all pending events of a specific type
+    static void purge(const SignalT& signal);
 private:
     static map_type map_;
     static event_queue_type event_queue_;
@@ -69,8 +76,6 @@ typename dispatcher<SignalT, SlotArgTs...>::event_queue_type dispatcher<SignalT,
 
 
 #include <events/utility.hpp>
-#include <tuple>
-#include <iostream>
 
 namespace events
 {
@@ -104,9 +109,38 @@ size_t dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (
 }
 
 template <class SignalT, class ... SlotArgTs>
+template <class ... ArgTs>
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch_bind(const SignalT& signal, const std::function<void(ArgTs..., SlotArgTs...)>& slot, ArgTs... bound_args)
+{
+    map_[signal].push_back(std::bind(slot, std::forward<ArgTs>(bound_args) ...));
+    return map_[signal].size() - 1;
+}
+
+template <class SignalT, class ... SlotArgTs>
+template <class ClassT, class ... ArgTs>
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch_bind(const SignalT& signal, void (ClassT::*slot)(ArgTs..., SlotArgTs...), ArgTs... bound_args)
+{
+    bool exists = false;
+    for(auto& f : map_[signal])
+    {
+        if(reinterpret_cast<size_t>(&slot) == utility::get_address(f)) exists = true;
+    }
+    if(!exists) map_[signal].push_back(std::bind(slot, std::forward<ArgTs>(bound_args) ...));
+    return map_[signal].size() - 1;
+}
+
+template <class SignalT, class ... SlotArgTs>
+template <class ClassT, class ... ArgTs>
+size_t dispatcher<SignalT, SlotArgTs...>::dispatch_bind(const SignalT& signal, ClassT* target, void (ClassT::*slot)(ArgTs..., SlotArgTs...), ArgTs... bound_args)
+{
+    map_[signal].push_back([target, slot, bound_args...](SlotArgTs... args){ (target->*slot)(bound_args..., std::forward<SlotArgTs>(args) ...); });
+    return map_[signal].size() - 1;
+}
+
+template <class SignalT, class ... SlotArgTs>
 void dispatcher<SignalT, SlotArgTs...>::event(const SignalT& signal, SlotArgTs... args)
 {
-    event_queue_.push(std::make_tuple(signal, std::forward_as_tuple(args...)));
+    event_queue_.push(std::make_tuple(signal, std::forward_as_tuple(std::forward<SlotArgTs>(args) ...)));
 }
 
 template <class SignalT, class ... SlotArgTs>
@@ -169,6 +203,16 @@ void dispatcher<SignalT,SlotArgTs...>::calloff(const SignalT& signal, size_t ind
 {
     if(map_.count(signal) && map_[signal].size() > index)
         map_[signal].erase(map_[signal].begin() + index);
+}
+
+template <class SignalT, class ... SlotArgTs>
+void dispatcher<SignalT,SlotArgTs...>::purge(const SignalT& signal)
+{
+    while(event_queue_.size())
+    {
+        if(std::get<0>(event_queue_.front()) == signal)
+            event_queue_.pop();
+    }
 }
 
 }

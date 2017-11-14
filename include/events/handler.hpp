@@ -14,6 +14,10 @@ struct handler
     typedef std::pair<SignalT, size_t> slot_handle_type;
 
     void dispatch(const SignalT& signal, void (CRTP::*slot)(SlotArgTs...));
+
+    template<class ... ArgTs>
+    void dispatch_bind(const SignalT& signal, void (CRTP::*slot)(ArgTs..., SlotArgTs...), ArgTs... bound_args);
+    
     void event(const SignalT& signal, SlotArgTs... args);
 
     ~handler();
@@ -39,6 +43,16 @@ void handler<CRTP, SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void 
         std::make_pair(
             signal,
             dispatcher<SignalT, SlotArgTs...>::dispatch(signal, reinterpret_cast<CRTP*>(this), slot)));
+}
+
+template <class CRTP, class SignalT, class ... SlotArgTs>
+template <class ... ArgTs>
+void handler<CRTP, SignalT, SlotArgTs...>::dispatch_bind(const SignalT& signal, void (CRTP::*slot)(ArgTs..., SlotArgTs...), ArgTs... bound_args)
+{
+    used_slots_.push_back(
+        std::make_pair(
+            signal,
+            dispatcher<SignalT, SlotArgTs...>::dispatch_bind(signal, reinterpret_cast<CRTP*>(this), slot, std::forward<ArgTs>(bound_args) ...)));
 }
 
 template <class CRTP, class SignalT, class ... SlotArgTs>

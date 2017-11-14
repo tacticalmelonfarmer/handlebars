@@ -17,12 +17,18 @@ struct connected : handler<connected, signals>
     }
     void trigger()
     {
+        events::dispatcher<signals>::purge(signals::trigger); // prevent consecutive calls to same function
         event(signals::trigger);
+    }
+    void other_method(int i, float f, char c)
+    {
+        std::cout << "dispatch_bind success!" << i << f << c << std::endl;
     }
     connected(std::string const& message)
     {
         message_ = message;
         dispatch(signals::trigger, &connected::boom);
+        dispatch_bind(signals::trigger, &connected::other_method, 42, 3.14f, '0');
     }
     std::string message_;
 };

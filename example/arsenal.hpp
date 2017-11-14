@@ -21,6 +21,11 @@ struct remote
     void attach(bomb* Bomb, int){b = Bomb;}
     void arm(bomb*, int Timeout)
     {
+        if(b == nullptr)
+        {
+            std::cout << "attach to a bomb first" << std::endl;
+            return;
+        }
         std::thread timer([this, Timeout]{
             this->armed = true;
             std::cout << "we have armed a bomb for " << Timeout << " seconds." << std::endl;
@@ -28,11 +33,10 @@ struct remote
             if(this->armed)
                 this->b->trigger();
         });
-        timer.detach();
     }
     void disarm(bomb*, int){ armed = false; }
 private:
-    bomb* b;
+    bomb* b=nullptr;
     bool armed;
 };
 
