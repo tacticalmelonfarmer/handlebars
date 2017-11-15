@@ -13,7 +13,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_executable(dispatch_use example/dispatch_use.cpp)
 target_link_libraries(dispatch_use ${CMAKE_THREAD_LIBS_INIT})
-target_compile_features(dispatch_use PUBLIC cxx_std_17)
+target_compile_features(dispatch_use PUBLIC cxx_std_14)
 
 add_executable(handler_use example/handler_use.cpp)
-target_compile_features(handler_use PUBLIC cxx_std_17)
+target_compile_features(handler_use PUBLIC cxx_std_14)
