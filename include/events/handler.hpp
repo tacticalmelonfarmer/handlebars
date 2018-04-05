@@ -15,9 +15,7 @@ struct handler
   void dispatch(const SignalT& signal, void (CRTP::*slot)(SlotArgTs...));
 
   template<class... ArgTs>
-  void dispatch_bind(const SignalT& signal,
-                     void (CRTP::*slot)(ArgTs..., SlotArgTs...),
-                     ArgTs... bound_args);
+  void dispatch_bind(const SignalT& signal, void (CRTP::*slot)(ArgTs..., SlotArgTs...), ArgTs... bound_args);
 
   void event(const SignalT& signal, SlotArgTs... args);
 
@@ -35,18 +33,16 @@ private:
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <events/utility.hpp>
+#include "utility.hpp"
 #include <tuple>
 
 namespace events {
 template<class CRTP, class SignalT, class... SlotArgTs>
 void
-handler<CRTP, SignalT, SlotArgTs...>::dispatch(const SignalT& signal,
-                                               void (CRTP::*slot)(SlotArgTs...))
+handler<CRTP, SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (CRTP::*slot)(SlotArgTs...))
 {
-  used_slots_.push_back(std::make_pair(
-    signal,
-    dispatcher<SignalT, SlotArgTs...>::dispatch(signal, reinterpret_cast<CRTP*>(this), slot)));
+  used_slots_.push_back(
+    std::make_pair(signal, dispatcher<SignalT, SlotArgTs...>::dispatch(signal, reinterpret_cast<CRTP*>(this), slot)));
 }
 
 template<class CRTP, class SignalT, class... SlotArgTs>
@@ -56,10 +52,10 @@ handler<CRTP, SignalT, SlotArgTs...>::dispatch_bind(const SignalT& signal,
                                                     void (CRTP::*slot)(ArgTs..., SlotArgTs...),
                                                     ArgTs... bound_args)
 {
-  used_slots_.push_back(std::make_pair(
-    signal,
-    dispatcher<SignalT, SlotArgTs...>::dispatch_bind(
-      signal, reinterpret_cast<CRTP*>(this), slot, std::forward<ArgTs>(bound_args)...)));
+  used_slots_.push_back(
+    std::make_pair(signal,
+                   dispatcher<SignalT, SlotArgTs...>::dispatch_bind(
+                     signal, reinterpret_cast<CRTP*>(this), slot, std::forward<ArgTs>(bound_args)...)));
 }
 
 template<class CRTP, class SignalT, class... SlotArgTs>

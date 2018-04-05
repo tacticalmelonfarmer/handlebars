@@ -41,9 +41,7 @@ struct dispatcher
                               ArgTs... args);
 
   template<class ClassT, class... ArgTs>
-  static size_t dispatch_bind(const SignalT& signal,
-                              void (ClassT::*slot)(ArgTs..., SlotArgTs...),
-                              ArgTs... args);
+  static size_t dispatch_bind(const SignalT& signal, void (ClassT::*slot)(ArgTs..., SlotArgTs...), ArgTs... args);
 
   static void event(const SignalT& signal, SlotArgTs... args);
 
@@ -68,8 +66,7 @@ template<class SignalT, class... SlotArgTs>
 typename dispatcher<SignalT, SlotArgTs...>::map_type dispatcher<SignalT, SlotArgTs...>::map_ = {};
 
 template<class SignalT, class... SlotArgTs>
-typename dispatcher<SignalT, SlotArgTs...>::event_queue_type
-  dispatcher<SignalT, SlotArgTs...>::event_queue_ = {};
+typename dispatcher<SignalT, SlotArgTs...>::event_queue_type dispatcher<SignalT, SlotArgTs...>::event_queue_ = {};
 }
 
 // DISPATCH macro makes it easier to dispatch a signal to a member of an instance of a class type
@@ -82,15 +79,14 @@ typename dispatcher<SignalT, SlotArgTs...>::event_queue_type
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <events/utility.hpp>
+#include "utility.hpp"
 
 namespace events {
 
 template<class SignalT, class... SlotArgTs>
 size_t
-dispatcher<SignalT, SlotArgTs...>::dispatch(
-  const SignalT& signal,
-  const typename dispatcher<SignalT, SlotArgTs...>::slot_type& slot)
+dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal,
+                                            const typename dispatcher<SignalT, SlotArgTs...>::slot_type& slot)
 {
   map_[signal].push_back(slot);
   return map_[signal].size() - 1;
@@ -99,9 +95,7 @@ dispatcher<SignalT, SlotArgTs...>::dispatch(
 template<class SignalT, class... SlotArgTs>
 template<class ClassT>
 size_t
-dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal,
-                                            ClassT* target,
-                                            void (ClassT::*slot)(SlotArgTs...))
+dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...))
 {
   map_[signal].push_back([target, slot](SlotArgTs... args) { (target->*slot)(args...); });
   return map_[signal].size() - 1;
@@ -110,8 +104,7 @@ dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal,
 template<class SignalT, class... SlotArgTs>
 template<class ClassT>
 size_t
-dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal,
-                                            void (ClassT::*slot)(SlotArgTs...))
+dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal, void (ClassT::*slot)(SlotArgTs...))
 {
   bool exists = false;
   for (auto& f : map_[signal]) {
@@ -126,10 +119,9 @@ dispatcher<SignalT, SlotArgTs...>::dispatch(const SignalT& signal,
 template<class SignalT, class... SlotArgTs>
 template<class... ArgTs>
 size_t
-dispatcher<SignalT, SlotArgTs...>::dispatch_bind(
-  const SignalT& signal,
-  const std::function<void(ArgTs..., SlotArgTs...)>& slot,
-  ArgTs... bound_args)
+dispatcher<SignalT, SlotArgTs...>::dispatch_bind(const SignalT& signal,
+                                                 const std::function<void(ArgTs..., SlotArgTs...)>& slot,
+                                                 ArgTs... bound_args)
 {
   map_[signal].push_back(std::bind(slot, std::forward<ArgTs>(bound_args)...));
   return map_[signal].size() - 1;
@@ -170,8 +162,7 @@ template<class SignalT, class... SlotArgTs>
 void
 dispatcher<SignalT, SlotArgTs...>::event(const SignalT& signal, SlotArgTs... args)
 {
-  event_queue_.push(
-    std::make_tuple(signal, std::forward_as_tuple(std::forward<SlotArgTs>(args)...)));
+  event_queue_.push(std::make_tuple(signal, std::forward_as_tuple(std::forward<SlotArgTs>(args)...)));
 }
 
 template<class SignalT, class... SlotArgTs>
