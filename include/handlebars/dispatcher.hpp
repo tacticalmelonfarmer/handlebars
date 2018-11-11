@@ -1,12 +1,13 @@
 #pragma once
 
-#include <functional>
 #include <list>
 #include <queue>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "function.hpp"
 
 namespace handlebars {
 
@@ -16,7 +17,7 @@ struct dispatcher
   // signal differentiaties the type of event that is happening
   using signal_type = SignalT;
   // a slot is an event handler which can take arguments and has NO RETURN VALUE
-  using slot_type = std::function<void(SlotArgTs...)>;
+  using slot_type = function<void(SlotArgTs...)>;
   // this tuple packs arguments that will be pack with a signal and passed to an event handler
   using args_storage_type = std::tuple<SlotArgTs...>;
   // a slot list is a sequence of event handlers that will be called consecutively to handle an event
@@ -34,18 +35,16 @@ struct dispatcher
   using event_queue_type = std::deque<event_type>;
 
   // associates a SignalT signal with a callable entity slot
-  static slot_id_type connect(const SignalT& signal, const slot_type& slot);
+  template<typename SlotT>
+  static slot_id_type connect(const SignalT& signal, SlotT&& slot);
 
   // associates a SignalT signal with a member function pointer slot of a class instance
-  template<typename ClassT>
-  static slot_id_type connect_member(const SignalT& signal, ClassT* target, void (ClassT::*slot)(SlotArgTs...));
+  template<typename ClassT, typename SlotT>
+  static slot_id_type connect_member(const SignalT& signal, ClassT&& target, SlotT slot);
 
   // associates a SignalT signal with a member function pointer slot of a class instance, after binding arguments to it
-  template<typename ClassT, typename... ArgTs>
-  static slot_id_type connect_bind_member(const SignalT& signal,
-                                          ClassT* target,
-                                          void (ClassT::*slot)(ArgTs..., SlotArgTs...),
-                                          ArgTs&&... args);
+  template<typename ClassT, typename SlotT, typename... BoundArgTs>
+  static slot_id_type connect_bind_member(const SignalT& signal, ClassT&& target, SlotT slot, BoundArgTs&&... args);
 
   // pushes a new event onto the queue with a signal value and arguments, if any
   static void push_event(const SignalT& signal, SlotArgTs&&... args);
@@ -88,36 +87,34 @@ typename dispatcher<SignalT, SlotArgTs...>::event_queue_type dispatcher<SignalT,
 namespace handlebars {
 
 template<typename SignalT, typename... SlotArgTs>
+template<typename SlotT>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
-dispatcher<SignalT, SlotArgTs...>::connect(const SignalT& signal, const slot_type& slot)
+dispatcher<SignalT, SlotArgTs...>::connect(const SignalT& signal, SlotT&& slot)
 {
-  m_slot_map[signal].push_back(slot);
+  m_slot_map[signal].emplace_back(std::forward<SlotT>(slot));
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
 template<typename SignalT, typename... SlotArgTs>
-template<typename ClassT>
+template<typename ClassT, typename SlotT>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
-dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal,
-                                                  ClassT* target,
-                                                  void (ClassT::*slot)(SlotArgTs...))
+dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal, ClassT&& target, SlotT slot)
 {
-  m_slot_map[signal].push_back(
-    [target, slot](SlotArgTs&&... args) { (target->*slot)(std::forward<SlotArgTs>(args)...); });
+  m_slot_map[signal].emplace_back(std::forward<ClassT>(target), slot);
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
 template<typename SignalT, typename... SlotArgTs>
-template<typename ClassT, typename... ArgTs>
+template<typename ClassT, typename SlotT, typename... BoundArgTs>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
 dispatcher<SignalT, SlotArgTs...>::connect_bind_member(const SignalT& signal,
-                                                       ClassT* target,
-                                                       void (ClassT::*slot)(ArgTs..., SlotArgTs...),
-                                                       ArgTs&&... bound_args)
+                                                       ClassT&& target,
+                                                       SlotT slot,
+                                                       BoundArgTs&&... bound_args)
 {
-  m_slot_map[signal].push_back([target, slot, &bound_args...](SlotArgTs&&... args) {
-    (target->*slot)(std::forward<ArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...);
-  });
+  m_slot_map[signal].emplace_back(std::move([&](SlotArgTs&&... args) {
+    (target.*slot)(std::forward<BoundArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...);
+  }));
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
