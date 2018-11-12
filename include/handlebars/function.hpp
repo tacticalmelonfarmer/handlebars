@@ -6,7 +6,7 @@
 #include <utility>
 
 #ifndef HANDLEBARS_FUNCTION_COMMON_MAX_SIZE
-#define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE 64
+#define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE 48
 #endif
 
 #define HANDLEBARS_FUNCTION_ERROR                                                                                      \
