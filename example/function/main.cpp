@@ -32,10 +32,15 @@ main()
   function<int(int)> f_member_from_pair;
   f_member_from_pair = { object{}, &object::member };
   function<int(int)> f_functor(function<int(int)>(functor{}));
+  function<int(int)> f_remote(std::make_shared<object>(), &object::member);
+  function<int(int)> f_rawptr(new object, &object::member);
+
   assert(f_lambda(1) == 2);
   assert(f_capturing_lambda(1) == 2);
   assert(f_free(1) == 2);
   assert(f_member(1) == 2);
   assert(f_member_from_pair(1) == 2);
   assert(f_functor(1) == 2);
+  assert(f_remote(1) == 2);
+  assert(f_rawptr(1) == 2);
 }

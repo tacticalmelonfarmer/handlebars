@@ -2,19 +2,19 @@ cmake_minimum_required(VERSION 3.7)
 
 project(handlebars LANGUAGES CXX)
 
-add_executable(demo1 example/demo1/demo1.cpp)
-target_compile_features(demo1 PUBLIC cxx_std_17)
-target_include_directories(demo1 PUBLIC include)
+add_executable(function example/function/main.cpp)
+target_compile_features(function PUBLIC cxx_std_17)
+target_include_directories(function PUBLIC include)
 
-add_executable(demo2 example/demo2/demo2.cpp)
-target_compile_features(demo2 PUBLIC cxx_std_17)
-target_include_directories(demo2 PUBLIC include)
+add_executable(global_api example/global_api/main.cpp)
+target_compile_features(global_api PUBLIC cxx_std_17)
+target_include_directories(global_api PUBLIC include)
 
-add_executable(demo3 example/demo3/demo3.cpp)
-target_compile_features(demo3 PUBLIC cxx_std_17)
-target_include_directories(demo3 PUBLIC include)
+add_executable(minimal_api example/minimal_api/main.cpp)
+target_compile_features(minimal_api PUBLIC cxx_std_17)
+target_include_directories(minimal_api PUBLIC include)
 
-set_target_properties(demo1 demo2 demo3
+set_target_properties(function global_api minimal_api
   PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
