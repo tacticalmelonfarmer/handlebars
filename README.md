@@ -30,3 +30,6 @@ The dispatcher class uses a custom implementation of a function holder
 that explcictly does not allocate anything on the heap. To adjust
 the fixed stack allocation size do `#define HANDLEBARS_COMMON_FUNCTION_MAX_SIZE`
 to be a positive integer literal that you would prefer.
+see example in *example/function* for all the different ways you can construct a function.
+
+##### Note: be careful when using `conect_bind` or `connect_bind_member` methods, as the stored callable will take up more stack space

@@ -1,5 +1,5 @@
+#include <assert.h>
 #include <handlebars/handler.hpp>
-#include <iostream>
 
 enum class op
 {
@@ -35,6 +35,6 @@ main()
   handler.push_event(op::subtract, a, b);
   handler.push_event(op::multiply, a, b);
   handler.push_event(op::divide, a, b);
-  std::cout << a << std::endl;
+  assert((int)a == 1);
   return 0;
 }

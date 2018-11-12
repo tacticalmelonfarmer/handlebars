@@ -31,7 +31,7 @@ main()
   function<int(int)> f_member(object{}, &object::member);
   function<int(int)> f_member_from_pair;
   f_member_from_pair = { object{}, &object::member };
-  function<int(int)> f_functor(function<int(int)>(functor{}));
+  function<int(int)> f_functor(function<int(int)>(functor{})); // should move construct from functor
   function<int(int)> f_remote(std::make_shared<object>(), &object::member);
   function<int(int)> f_rawptr(new object, &object::member);
 

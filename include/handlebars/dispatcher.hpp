@@ -112,9 +112,15 @@ dispatcher<SignalT, SlotArgTs...>::connect_bind_member(const SignalT& signal,
                                                        SlotT slot,
                                                        BoundArgTs&&... bound_args)
 {
-  m_slot_map[signal].emplace_back(std::move([&](SlotArgTs&&... args) {
-    (target.*slot)(std::forward<BoundArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...);
-  }));
+  if constexpr (std::is_pointer_v<ClassT>) {
+    m_slot_map[signal].emplace_back(std::move([&](SlotArgTs&&... args) {
+      (target->*slot)(std::forward<BoundArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...);
+    }));
+  } else {
+    m_slot_map[signal].emplace_back(std::move([&](SlotArgTs&&... args) {
+      (target.*slot)(std::forward<BoundArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...);
+    }));
+  }
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 

@@ -46,7 +46,7 @@ template<typename SlotT>
 auto
 handler<DerivedT, SignalT, SlotArgTs...>::connect(const SignalT& signal, SlotT slot)
 {
-  m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_member(signal, *static_cast<DerivedT*>(this), slot));
+  m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_member(signal, static_cast<DerivedT*>(this), slot));
   return m_slots.back();
 }
 
@@ -56,7 +56,7 @@ auto
 handler<DerivedT, SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT slot, BoundArgTs&&... bound_args)
 {
   m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_bind_member(
-    signal, *static_cast<DerivedT*>(this), slot, std::forward<BoundArgTs>(bound_args)...));
+    signal, static_cast<DerivedT*>(this), slot, std::forward<BoundArgTs>(bound_args)...));
   return m_slots.back();
 }
 
