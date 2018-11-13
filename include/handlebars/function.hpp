@@ -96,19 +96,8 @@ struct generic_call_operator
   using type7 = ReturnT (T::*)(ArgTs...) const volatile&;
   using type8 = ReturnT (T::*)(ArgTs...) volatile&&;
   using type9 = ReturnT (T::*)(ArgTs...) const volatile&&;
-  // i am confused
-  using type10 = ReturnT (T::*)(ArgTs...) noexcept;
-  using type11 = ReturnT (T::*)(ArgTs...) & noexcept;
-  using type12 = ReturnT (T::*)(ArgTs...) const& noexcept;
-  using type13 = ReturnT (T::*)(ArgTs...) && noexcept;
-  using type14 = ReturnT (T::*)(ArgTs...) const&& noexcept;
-  using type15 = ReturnT (T::*)(ArgTs...) volatile noexcept;
-  using type16 = ReturnT (T::*)(ArgTs...) volatile& noexcept;
-  using type17 = ReturnT (T::*)(ArgTs...) const volatile& noexcept;
-  using type18 = ReturnT (T::*)(ArgTs...) volatile&& noexcept;
-  using type19 = ReturnT (T::*)(ArgTs...) const volatile&& noexcept;
-  using type20 = ReturnT (T::*)(ArgTs...) const;
-  // now the final stretch
+  using type10 = ReturnT (T::*)(ArgTs...) const;
+  // nice wall of overloads eh?
   static constexpr type0 check(type0) { return {}; }
   static constexpr type1 check(type1) { return {}; }
   static constexpr type2 check(type2) { return {}; }
@@ -120,16 +109,6 @@ struct generic_call_operator
   static constexpr type8 check(type8) { return {}; }
   static constexpr type9 check(type9) { return {}; }
   static constexpr type10 check(type10) { return {}; }
-  static constexpr type11 check(type11) { return {}; }
-  static constexpr type12 check(type12) { return {}; }
-  static constexpr type13 check(type13) { return {}; }
-  static constexpr type14 check(type14) { return {}; }
-  static constexpr type15 check(type15) { return {}; }
-  static constexpr type16 check(type16) { return {}; }
-  static constexpr type17 check(type17) { return {}; }
-  static constexpr type18 check(type18) { return {}; }
-  static constexpr type19 check(type19) { return {}; }
-  static constexpr type20 check(type20) { return {}; }
   using type = decltype(check(&T::operator()));
 };
 }
