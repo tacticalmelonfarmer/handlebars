@@ -74,12 +74,6 @@ template<typename SignalT, typename... SlotArgTs>
 typename dispatcher<SignalT, SlotArgTs...>::event_queue_type dispatcher<SignalT, SlotArgTs...>::m_event_queue = {};
 }
 
-// DISPATCH macro makes it easier to dispatch a signal to a member of an instance of a typename type
-// syntactic sugar i guess.
-// example: "DISPATCH(signal, typename_instance, id_of_member)" instead of "dispatch(signal,
-// &typename_instance, &decltype(typename_instance)::id_of_member)"
-#define DISPATCH(signal, object, member) dispatch(signal, &object, &decltype(object)::member)
-
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
