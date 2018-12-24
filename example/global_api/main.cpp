@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+// signal type to handle events for
 enum class my_signals
 {
   open,
@@ -11,6 +12,7 @@ enum class my_signals
   close
 };
 
+// class which implements various event handlers and connects them to a dispatcher
 struct my_event_handler : public handlebars::handler<my_event_handler, my_signals, const std::string&>
 {
   void open(const std::string& Name, const std::string& Msg)

@@ -38,6 +38,10 @@ struct dispatcher
   template<typename SlotT>
   static slot_id_type connect(const SignalT& signal, SlotT&& slot);
 
+  // associates a SignalT signal with a callable entity slot, after binding arguments to it
+  template<typename SlotT, typename... BoundArgTs>
+  static slot_id_type connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... args);
+
   // associates a SignalT signal with a member function pointer slot of a class instance
   template<typename ClassT, typename SlotT>
   static slot_id_type connect_member(const SignalT& signal, ClassT&& target, SlotT slot);
@@ -86,6 +90,16 @@ typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
 dispatcher<SignalT, SlotArgTs...>::connect(const SignalT& signal, SlotT&& slot)
 {
   m_slot_map[signal].emplace_back(std::forward<SlotT>(slot));
+  return std::make_tuple(signal, --m_slot_map[signal].end());
+}
+
+template<typename SignalT, typename... SlotArgTs>
+template<typename SlotT, typename... BoundArgTs>
+typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
+dispatcher<SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... args)
+{
+  m_slot_map[signal].emplace_back(std::move(
+    [&](SlotArgTs&&... args) { slot(std::forward<BoundArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...) }));
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 

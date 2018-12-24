@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
 
 project(handlebars LANGUAGES CXX)
 
-add_executable(function example/function/main.cpp)
+add_executable(function tests/function/main.cpp)
 target_compile_features(function PUBLIC cxx_std_17)
 target_include_directories(function PUBLIC include)
 

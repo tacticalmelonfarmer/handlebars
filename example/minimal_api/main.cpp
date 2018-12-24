@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <handlebars/handler.hpp>
 
+// signal type to handle events for
 enum class op
 {
   add,
@@ -9,6 +10,7 @@ enum class op
   divide
 };
 
+// class which implements various event handlers and connects them to a dispatcher
 struct arithmetic : public handlebars::handler<arithmetic, op, double&, const double&>
 {
   void add(double& a, const double& b) { a = a + b; }
