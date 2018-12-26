@@ -20,6 +20,9 @@ struct functor
   int operator()(int i) { return i + 1; }
 };
 
+struct fail_type
+{};
+
 int
 main()
 {
@@ -33,9 +36,9 @@ main()
   function<int(int)> f_member(object{}, &object::member);
   function<int(int)> f_member_from_pair;
   f_member_from_pair = { object{}, &object::member };
-  function<int(int)> f_functor(function<int(int)>(functor{}));
   function<int(int)> f_safe_ptr(std::make_shared<object>(), &object::member);
   function<int(int)> f_unsafe_ptr(new object, &object::member);
+  function<int(int)> f_functor(function<int(int)>(functor{}));
 
   assert(f_lambda(1) == 2);
   assert(f_ref_capturing_lambda(1) == 2);
@@ -43,9 +46,9 @@ main()
   assert(f_free(1) == 2);
   assert(f_member(1) == 2);
   assert(f_member_from_pair(1) == 2);
-  assert(f_functor(1) == 2);
   assert(f_safe_ptr(1) == 2);
   assert(f_unsafe_ptr(1) == 2);
+  assert(f_functor(1) == 2);
 
   // here we test the c++17 deduction guides, which allow us to not explicitly specify any template arguments
 

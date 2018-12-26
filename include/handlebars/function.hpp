@@ -6,7 +6,7 @@
 #include <utility>
 
 #ifndef HANDLEBARS_FUNCTION_COMMON_MAX_SIZE
-#define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE 48
+#define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE 32
 #endif
 
 #define HANDLEBARS_FUNCTION_ERROR                                                                                      \
@@ -23,7 +23,6 @@ struct function_base
   virtual ReturnT operator()(ArgTs&&...) = 0;
 };
 
-// a member function of an instance of a class COPIED INTO FUNCTION
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
 struct member_function : function_base<ReturnT, ArgTs...>
 {
@@ -41,11 +40,10 @@ private:
   MemPtrT m_member;
 };
 
-// a member function of an instance of a class SAFELY POINTED TO
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
-struct member_function_reference : function_base<ReturnT, ArgTs...>
+struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
 {
-  member_function_reference(std::shared_ptr<ClassT> object, MemPtrT member)
+  member_function_smart_pointer(std::shared_ptr<ClassT> object, MemPtrT member)
     : m_object(object)
     , m_member(member)
   {
@@ -59,11 +57,10 @@ private:
   MemPtrT m_member;
 };
 
-// a member function of an instance of a class -->UNSAFELY<-- POINTED TO
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
-struct member_function_pointer : function_base<ReturnT, ArgTs...>
+struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
 {
-  member_function_pointer(ClassT* object, MemPtrT member)
+  member_function_raw_pointer(ClassT* object, MemPtrT member)
     : m_object(object)
     , m_member(member)
   {
@@ -77,7 +74,6 @@ private:
   MemPtrT m_member;
 };
 
-// any function with an address assignable to ReturnT(*)(ArgTs...)
 template<typename ReturnT, typename... ArgTs>
 struct free_function : function_base<ReturnT, ArgTs...>
 {
@@ -109,18 +105,18 @@ struct generic_call_operator
   using type10 = ReturnT (T::*)(ArgTs...) volatile&&;
   using type11 = ReturnT (T::*)(ArgTs...) const volatile&&;
   // nice wall of overloads eh?
-  static constexpr type0 check(type0) { return {}; }
-  static constexpr type1 check(type1) { return {}; }
-  static constexpr type2 check(type2) { return {}; }
-  static constexpr type3 check(type3) { return {}; }
-  static constexpr type4 check(type4) { return {}; }
-  static constexpr type5 check(type5) { return {}; }
-  static constexpr type6 check(type6) { return {}; }
-  static constexpr type7 check(type7) { return {}; }
-  static constexpr type8 check(type8) { return {}; }
-  static constexpr type9 check(type9) { return {}; }
-  static constexpr type10 check(type10) { return {}; }
-  static constexpr type11 check(type11) { return {}; }
+  static constexpr type0 check(type0);
+  static constexpr type1 check(type1);
+  static constexpr type2 check(type2);
+  static constexpr type3 check(type3);
+  static constexpr type4 check(type4);
+  static constexpr type5 check(type5);
+  static constexpr type6 check(type6);
+  static constexpr type7 check(type7);
+  static constexpr type8 check(type8);
+  static constexpr type9 check(type9);
+  static constexpr type10 check(type10);
+  static constexpr type11 check(type11);
   using type = decltype(check(&T::operator()));
 };
 
@@ -132,24 +128,35 @@ template<typename T>
 decltype(std::is_reference_v<T> && std::is_function_v<std::remove_reference_t<T>>) is_function_reference;
 // clang-format on
 
+// this initializes deduction_guide for lambdas or functors
 template<typename T>
 struct deduction_guide
 {
   using type = typename deduction_guide<decltype(&T::operator())>::type;
 };
 
+// this guides deduction for free/static-member function pointers
 template<typename ReturnT, typename... ArgTs>
 struct deduction_guide<ReturnT (*)(ArgTs...)>
 {
   using type = ReturnT(ArgTs...);
 };
 
+// this guides deduction for free/static-member function references
+template<typename ReturnT, typename... ArgTs>
+struct deduction_guide<ReturnT (&)(ArgTs...)>
+{
+  using type = ReturnT(ArgTs...);
+};
+
+// this guides deduction for functors or mutable lambdas
 template<typename ClassT, typename ReturnT, typename... ArgTs>
 struct deduction_guide<ReturnT (ClassT::*)(ArgTs...)>
 {
   using type = ReturnT(ArgTs...);
 };
 
+// this guides deduction for lambdas or const functors
 template<typename ClassT, typename ReturnT, typename... ArgTs>
 struct deduction_guide<ReturnT (ClassT::*)(ArgTs...) const>
 {
@@ -167,26 +174,29 @@ struct function;
 template<typename ReturnT, typename... ArgTs>
 struct function<ReturnT(ArgTs...)>
 {
-  using function_pointer_type = ReturnT (*)(ArgTs...);
+  using function_type = ReturnT(ArgTs...);
 
-  // copies an object and holds a pointer to member function of the copy
+  // copies/moves an object and holds a pointer to member function of the held object
   template<typename ClassT, typename MemPtrT>
   function(ClassT&& object, MemPtrT member);
 
-  // copies an object and uses its call operator with matching signature
+  // copies/moves an object and points to it's call operator `ClassT::operator()`
   template<typename ClassT>
   function(ClassT&& object);
 
-  // holds a pointer to an object and a pointer to its member function
+  // points to a non-static member function using a pointer to member and pointer to parent object
   template<typename ClassT, typename MemPtrT>
   function(std::shared_ptr<ClassT> object, MemPtrT member);
 
-  // holds pointer to an object and uses its call operator with matching signature
+  // points to a non-static member function using a pointer to `ClassT::operator()` and pointer to the parent object
   template<typename ClassT>
   function(std::shared_ptr<ClassT> object);
 
-  // holds a free function or static member function pointer
-  function(function_pointer_type function_pointer);
+  // points to a callable using a pointer to function
+  function(function_type* function_pointer);
+
+  // points to a callable using a reference to function
+  function(function_type& function_reference);
 
   // default initialize to be an empty function<...>
   function()
@@ -194,61 +204,19 @@ struct function<ReturnT(ArgTs...)>
   {}
 
   // copy from another function<...>
-  function(const function<ReturnT(ArgTs...)>& other)
-  {
-    if (!other.m_empty) {
-      m_storage = other.m_storage;
-      m_empty = false;
-    }
-  }
+  function(const function<ReturnT(ArgTs...)>& other);
 
   // move from another function<...>
-  function(function<ReturnT(ArgTs...)>&& other) noexcept
-  {
-    if (other.m_empty) {
-      m_storage = std::move(other.m_storage);
-      other.m_empty = true;
-      m_empty = false;
-    }
-  }
+  function(function<ReturnT(ArgTs...)>&& other) noexcept;
 
   // copy assignment
-  function<ReturnT(ArgTs...)>& operator=(const function<ReturnT(ArgTs...)>& rhs)
-  {
-    destroy();
-    if (rhs.m_empty) {
-      m_empty = true;
-      return *this;
-    } else {
-      m_storage = rhs.m_storage;
-      m_empty = false;
-      return *this;
-    }
-  }
+  function<ReturnT(ArgTs...)>& operator=(const function<ReturnT(ArgTs...)>& rhs);
 
   // move assignment
-  function<ReturnT(ArgTs...)>& operator=(function<ReturnT(ArgTs...)>&& rhs) noexcept
-  {
-    destroy();
-    if (rhs.m_empty) {
-      m_empty = true;
-      return *this;
-    } else {
-      m_storage = std::move(rhs.m_storage);
-      rhs.m_empty = true;
-      m_empty = false;
-      return *this;
-    }
-  }
+  function<ReturnT(ArgTs...)>& operator=(function<ReturnT(ArgTs...)>&& rhs) noexcept;
 
   // call the stored function
-  ReturnT operator()(ArgTs&&... arguments)
-  {
-    if (m_empty)
-      throw empty_function{};
-    else
-      return access()->operator()(std::forward<ArgTs>(arguments)...);
-  }
+  ReturnT operator()(ArgTs&&... arguments);
 
   // self-destruct sequence
   ~function() { destroy(); }
@@ -282,11 +250,11 @@ function<ReturnT(ArgTs...)>::function(ClassT&& object, MemPtrT member)
 {
   if constexpr (std::is_pointer_v<ClassT>) { // this branch is unsafe, use std::shared_ptr<...>
     using nonptr_class_t = std::remove_pointer_t<ClassT>;
-    static_assert(sizeof(member_function_reference<nonptr_class_t, MemPtrT, ReturnT, ArgTs...>) <=
+    static_assert(sizeof(member_function_smart_pointer<nonptr_class_t, MemPtrT, ReturnT, ArgTs...>) <=
                     HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                   HANDLEBARS_FUNCTION_ERROR);
     new (access())
-      member_function_pointer<nonptr_class_t, MemPtrT, ReturnT, ArgTs...>(std::forward<ClassT>(object), member);
+      member_function_raw_pointer<nonptr_class_t, MemPtrT, ReturnT, ArgTs...>(std::forward<ClassT>(object), member);
   } else {
     static_assert(sizeof(member_function<ClassT, MemPtrT, ReturnT, ArgTs...>) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                   HANDLEBARS_FUNCTION_ERROR);
@@ -302,10 +270,10 @@ function<ReturnT(ArgTs...)>::function(ClassT&& object)
   if constexpr (std::is_pointer_v<ClassT>) { // this branch is unsafe, use std::shared_ptr<...>
     using nonptr_class_t = std::remove_pointer_t<ClassT>;
     using call_operator_ptr_t = typename sfinae::generic_call_operator<nonptr_class_t, ReturnT, ArgTs...>::type;
-    static_assert(sizeof(member_function_reference<nonptr_class_t, call_operator_ptr_t, ReturnT, ArgTs...>) <=
+    static_assert(sizeof(member_function_smart_pointer<nonptr_class_t, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                     HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                   HANDLEBARS_FUNCTION_ERROR);
-    new (access()) member_function_pointer<nonptr_class_t, call_operator_ptr_t, ReturnT, ArgTs...>(
+    new (access()) member_function_raw_pointer<nonptr_class_t, call_operator_ptr_t, ReturnT, ArgTs...>(
       std::forward<ClassT>(object), &nonptr_class_t::operator());
   } else {
     using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
@@ -322,10 +290,10 @@ template<typename ClassT, typename MemPtrT>
 function<ReturnT(ArgTs...)>::function(std::shared_ptr<ClassT> object, MemPtrT member)
   : m_empty(false)
 {
-  static_assert(sizeof(member_function_reference<ClassT, MemPtrT, ReturnT, ArgTs...>) <=
+  static_assert(sizeof(member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access()) member_function_reference<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
+  new (access()) member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -335,17 +303,86 @@ function<ReturnT(ArgTs...)>::function(std::shared_ptr<ClassT> object)
 {
   using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
 
-  static_assert(sizeof(member_function_reference<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
+  static_assert(sizeof(member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access()) member_function_reference<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
+  new (access())
+    member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
 }
 
 template<typename ReturnT, typename... ArgTs>
-function<ReturnT(ArgTs...)>::function(function_pointer_type function_pointer)
+function<ReturnT(ArgTs...)>::function(function_type* function_pointer)
   : m_empty(false)
 {
-  static_assert(sizeof(function_pointer_type) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE, HANDLEBARS_FUNCTION_ERROR);
+  static_assert(sizeof(function_type*) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE, HANDLEBARS_FUNCTION_ERROR);
   new (access()) free_function<ReturnT, ArgTs...>(function_pointer);
+}
+
+template<typename ReturnT, typename... ArgTs>
+function<ReturnT(ArgTs...)>::function(function_type& function_reference)
+  : m_empty(false)
+{
+  static_assert(sizeof(function_type*) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE, HANDLEBARS_FUNCTION_ERROR);
+  new (access()) free_function<ReturnT, ArgTs...>(&function_reference);
+}
+
+template<typename ReturnT, typename... ArgTs>
+function<ReturnT(ArgTs...)>::function(const function<ReturnT(ArgTs...)>& other)
+{
+  if (!other.m_empty) {
+    m_storage = other.m_storage;
+    m_empty = false;
+  }
+}
+
+template<typename ReturnT, typename... ArgTs>
+function<ReturnT(ArgTs...)>::function(function<ReturnT(ArgTs...)>&& other) noexcept
+{
+  if (other.m_empty) {
+    m_storage = std::move(other.m_storage);
+    other.m_empty = true;
+    m_empty = false;
+  }
+}
+
+template<typename ReturnT, typename... ArgTs>
+function<ReturnT(ArgTs...)>&
+function<ReturnT(ArgTs...)>::operator=(const function<ReturnT(ArgTs...)>& rhs)
+{
+  destroy();
+  if (rhs.m_empty) {
+    m_empty = true;
+    return *this;
+  } else {
+    m_storage = rhs.m_storage;
+    m_empty = false;
+    return *this;
+  }
+}
+
+template<typename ReturnT, typename... ArgTs>
+function<ReturnT(ArgTs...)>&
+function<ReturnT(ArgTs...)>::operator=(function<ReturnT(ArgTs...)>&& rhs) noexcept
+{
+  destroy();
+  if (rhs.m_empty) {
+    m_empty = true;
+    return *this;
+  } else {
+    m_storage = std::move(rhs.m_storage);
+    rhs.m_empty = true;
+    m_empty = false;
+    return *this;
+  }
+}
+
+template<typename ReturnT, typename... ArgTs>
+ReturnT
+function<ReturnT(ArgTs...)>::operator()(ArgTs&&... arguments)
+{
+  if (m_empty)
+    throw empty_function{};
+  else
+    return access()->operator()(std::forward<ArgTs>(arguments)...);
 }
 }
