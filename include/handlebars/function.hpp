@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <type_traits>
@@ -14,6 +15,28 @@
   "`HANDLEBARS_FUNCTION_COMMON_MAX_SIZE` "                                                                             \
   "before including this file"
 
+enum class function_source
+{
+  free,
+  member_external, // a member of a pointed to object
+  member_internal  // a member of a held and owned object
+};
+
+enum class function_ownership
+{
+  owned,
+  shared,
+  undefined
+};
+
+struct function_info
+{
+  const std::uintptr_t object;
+  const std::uintptr_t target;
+  const function_source source;
+  const function_ownership ownership;
+};
+
 namespace handlebars {
 inline namespace detail {
 template<typename ReturnT, typename... ArgTs>
@@ -21,6 +44,7 @@ struct function_base
 {
   virtual ~function_base() {}
   virtual ReturnT operator()(ArgTs&&...) = 0;
+  virtual function_info get_info() const = 0;
 };
 
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
@@ -34,6 +58,13 @@ struct member_function : function_base<ReturnT, ArgTs...>
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
   ReturnT operator()(ArgTs&&... args) override { return (m_object.*m_member)(std::forward<ArgTs>(args)...); }
+  function_info get_info() const override
+  {
+    return { reinterpret_cast<std::uintptr_t>(&m_object),
+             reinterpret_cast<std::uintptr_t>(&m_member),
+             function_source::member_internal,
+             function_ownership::owned };
+  }
 
 private:
   ClassT m_object;
@@ -51,6 +82,13 @@ struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
   ReturnT operator()(ArgTs&&... args) override { return (m_object.get()->*m_member)(std::forward<ArgTs>(args)...); }
+  function_info get_info() const override
+  {
+    return { reinterpret_cast<std::uintptr_t>(m_object.get()),
+             reinterpret_cast<std::uintptr_t>(&m_member),
+             function_source::member_external,
+             function_ownership::shared };
+  }
 
 private:
   std::shared_ptr<ClassT> m_object;
@@ -68,6 +106,13 @@ struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
   ReturnT operator()(ArgTs&&... args) override { return (m_object->*m_member)(std::forward<ArgTs>(args)...); }
+  function_info get_info() const override
+  {
+    return { reinterpret_cast<std::uintptr_t>(m_object),
+             reinterpret_cast<std::uintptr_t>(&m_member),
+             function_source::member_external,
+             function_ownership::undefined };
+  }
 
 private:
   ClassT* m_object;
@@ -82,6 +127,13 @@ struct free_function : function_base<ReturnT, ArgTs...>
     : m_function_ptr(pointer)
   {}
   ReturnT operator()(ArgTs&&... args) override { return (*m_function_ptr)(std::forward<ArgTs>(args)...); }
+  function_info get_info() const override
+  {
+    return { reinterpret_cast<std::uintptr_t>(nullptr),
+             reinterpret_cast<std::uintptr_t>(m_function_ptr),
+             function_source::free,
+             function_ownership::shared };
+  }
 
 private:
   function_ptr_t m_function_ptr;
@@ -162,8 +214,8 @@ struct deduction_guide<ReturnT (ClassT::*)(ArgTs...) const>
 {
   using type = ReturnT(ArgTs...);
 };
-}
-}
+} // namespace sfinae
+} // namespace detail
 
 struct empty_function
 {};
@@ -188,7 +240,7 @@ struct function<ReturnT(ArgTs...)>
   template<typename ClassT, typename MemPtrT>
   function(std::shared_ptr<ClassT> object, MemPtrT member);
 
-  // points to a non-static member function using a pointer to `ClassT::operator()` and pointer to the parent object
+  // points to an object and points to it's call operator `ClassT::operator()`
   template<typename ClassT>
   function(std::shared_ptr<ClassT> object);
 
@@ -217,6 +269,8 @@ struct function<ReturnT(ArgTs...)>
 
   // call the stored function
   ReturnT operator()(ArgTs&&... arguments);
+
+  function_info get_info() const { return access()->get_info(); }
 
   // self-destruct sequence
   ~function() { destroy(); }

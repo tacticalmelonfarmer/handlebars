@@ -13,20 +13,20 @@ template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 struct handler
 {
   // see dispatcher.hpp
-  typedef typename dispatcher<SignalT, SlotArgTs...>::slot_id_type slot_id_type;
+  using slot_id_type = typename dispatcher<SignalT, SlotArgTs...>::slot_id_type;
 
   // performs dispatcher<SignalT,SlotArgTs...>::connect_member(...) on a member function of the derived class
   template<typename SlotT>
-  auto connect(const SignalT& signal, SlotT slot);
+  slot_id_type connect(const SignalT& signal, SlotT slot);
 
   // performs dispatcher<SignalT,SlotArgTs...>::connect_bind_member(...) on a member function of the derived class
   template<typename SlotT, typename... BoundArgTs>
-  auto connect_bind(const SignalT& signal, SlotT slot, BoundArgTs&&... bound_args);
+  slot_id_type connect_bind(const SignalT& signal, SlotT slot, BoundArgTs&&... bound_args);
 
   // pushes a new event onto the queue with a signal value and arguments, if any
   void push_event(const SignalT& signal, SlotArgTs&&... args);
 
-  // removes all events using signal from event queue, useful for preventing duplicates when pushing an
+  // removes all events using a specific signal from the event queue, useful for preventing duplicates when pushing an
   // event
   void purge_events(const SignalT& signal);
 
@@ -43,7 +43,7 @@ private:
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 template<typename SlotT>
-auto
+typename handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
 handler<DerivedT, SignalT, SlotArgTs...>::connect(const SignalT& signal, SlotT slot)
 {
   m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_member(signal, static_cast<DerivedT*>(this), slot));
@@ -52,7 +52,7 @@ handler<DerivedT, SignalT, SlotArgTs...>::connect(const SignalT& signal, SlotT s
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 template<typename SlotT, typename... BoundArgTs>
-auto
+typename handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
 handler<DerivedT, SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT slot, BoundArgTs&&... bound_args)
 {
   m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_bind_member(
