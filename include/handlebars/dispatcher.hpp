@@ -62,8 +62,8 @@ struct dispatcher
   static void push_event(const SignalT& signal, SlotArgTs&&... args);
 
   // executes events and pops them off of the event queue the amount can be specified by limit, if limit is 0
-  // then all events are executed
-  static bool respond(size_t limit = 0);
+  // then all events are executed, returns number of events left on the queue
+  static size_t respond(size_t limit = 0);
 
   //  this removes an event handler from a slot list
   static void disconnect(const slot_id_type& slot_id);
@@ -187,22 +187,20 @@ dispatcher<SignalT, SlotArgTs...>::push_event(const SignalT& signal, SlotArgTs&&
   m_thread_pushing_event = true;
   {
     std::scoped_lock lock(m_event_mutex);
-    m_event_queue.push_back(std::make_tuple(signal, std::forward_as_tuple(std::forward<SlotArgTs>(args)...)));
+    m_event_queue.push_front(std::make_tuple(signal, std::forward_as_tuple(std::forward<SlotArgTs>(args)...)));
   }
   m_thread_pushing_event = false;
 }
 
 template<typename SignalT, typename... SlotArgTs>
-bool
+size_t
 dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
 {
   std::unique_lock<std::mutex> event_lock(m_event_mutex);
   std::unique_lock<std::mutex> slot_lock(m_slot_mutex, std::defer_lock);
   if (limit == 0)
     limit = m_event_queue.size();
-  if (m_event_queue.size() == 0)
-    return false;
-  for (size_t i = 0; (i < limit) && (i < m_event_queue.size()); ++i) {
+  for (size_t i = m_event_queue.size() - 1; limit != 0; --i, --limit) {
     if (m_thread_pushing_event == true) {
       event_lock.unlock();
       // allow events to be pushed
@@ -214,9 +212,9 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       std::apply(slot, std::get<1>(m_event_queue[i]));
     }
     slot_lock.unlock();
-    m_event_queue.pop_front();
+    m_event_queue.pop_back();
   }
-  return m_event_queue.size() > 0;
+  return m_event_queue.size();
 }
 
 template<typename SignalT, typename... SlotArgTs>
