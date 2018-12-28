@@ -48,14 +48,14 @@ struct arithmetic : public handlebars::handler<arithmetic, op, double&, const do
 int
 main()
 {
-  using disp = handlebars::dispatcher<op, double&, const double&>;
+  using dispatcher = handlebars::dispatcher<op, double&, const double&>;
   double a = 1.0;
   arithmetic handler;
   handler.push_event(op::add, a, 1.0);
   handler.push_event(op::subtract, a, 0.5);
   handler.push_event(op::multiply, a, 10.0);
   handler.push_event(op::divide, a, 2.0);
-  disp::respond();
+  dispatcher::respond();
   std::cout << a; // 7.5
   return 0;
 }

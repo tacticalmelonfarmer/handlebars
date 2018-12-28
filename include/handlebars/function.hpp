@@ -37,14 +37,29 @@ struct function_info
   const function_ownership ownership;
 };
 
+template<typename T>
+struct in_place_forward
+{
+  using type = T&&;
+};
+
+template<typename T>
+struct in_place_forward<T&>
+{
+  using type = T&;
+};
+
+template<typename T>
+using in_place_forward_t = typename in_place_forward<T>::type;
+
 namespace handlebars {
 inline namespace detail {
 template<typename ReturnT, typename... ArgTs>
 struct function_base
 {
   virtual ~function_base() {}
-  virtual ReturnT operator()(ArgTs&&...) = 0;
-  virtual function_info get_info() const = 0;
+  virtual ReturnT operator()(in_place_forward_t<ArgTs>...) = 0;
+  virtual function_info get_info() = 0;
 };
 
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
@@ -57,11 +72,14 @@ struct member_function : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(ArgTs&&... args) override { return (m_object.*m_member)(std::forward<ArgTs>(args)...); }
-  function_info get_info() const override
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (m_object.*m_member)(std::forward<ArgTs>(args)...);
+  }
+  function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(&m_object),
-             reinterpret_cast<std::uintptr_t>(&m_member),
+             0 /* reinterpret_cast<std::uintptr_t>(m_member) */,
              function_source::member_internal,
              function_ownership::owned };
   }
@@ -81,11 +99,14 @@ struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(ArgTs&&... args) override { return (m_object.get()->*m_member)(std::forward<ArgTs>(args)...); }
-  function_info get_info() const override
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (m_object.get()->*m_member)(std::forward<ArgTs>(args)...);
+  }
+  function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(m_object.get()),
-             reinterpret_cast<std::uintptr_t>(&m_member),
+             0 /* reinterpret_cast<std::uintptr_t>(m_member) */,
              function_source::member_external,
              function_ownership::shared };
   }
@@ -105,11 +126,14 @@ struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(ArgTs&&... args) override { return (m_object->*m_member)(std::forward<ArgTs>(args)...); }
-  function_info get_info() const override
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (m_object->*m_member)(std::forward<ArgTs>(args)...);
+  }
+  function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(m_object),
-             reinterpret_cast<std::uintptr_t>(&m_member),
+             0 /* reinterpret_cast<std::uintptr_t>(m_member) */,
              function_source::member_external,
              function_ownership::undefined };
   }
@@ -126,8 +150,11 @@ struct free_function : function_base<ReturnT, ArgTs...>
   free_function(function_ptr_t pointer)
     : m_function_ptr(pointer)
   {}
-  ReturnT operator()(ArgTs&&... args) override { return (*m_function_ptr)(std::forward<ArgTs>(args)...); }
-  function_info get_info() const override
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (*m_function_ptr)(std::forward<ArgTs>(args)...);
+  }
+  function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(nullptr),
              reinterpret_cast<std::uintptr_t>(m_function_ptr),
@@ -236,6 +263,14 @@ struct function<ReturnT(ArgTs...)>
   template<typename ClassT>
   function(ClassT&& object);
 
+  // points to an object and holds a pointer to non-static member function of the held object
+  template<typename ClassT, typename MemPtrT>
+  function(ClassT* object, MemPtrT member);
+
+  // points to an object and points to it's call operator `ClassT::operator()`
+  template<typename ClassT>
+  function(ClassT* object);
+
   // points to a non-static member function using a pointer to member and pointer to parent object
   template<typename ClassT, typename MemPtrT>
   function(std::shared_ptr<ClassT> object, MemPtrT member);
@@ -268,7 +303,8 @@ struct function<ReturnT(ArgTs...)>
   function<ReturnT(ArgTs...)>& operator=(function<ReturnT(ArgTs...)>&& rhs) noexcept;
 
   // call the stored function
-  ReturnT operator()(ArgTs&&... arguments);
+  template<typename... FwdArgTs>
+  ReturnT operator()(FwdArgTs&&... arguments);
 
   function_info get_info() const { return access()->get_info(); }
 
@@ -302,18 +338,9 @@ template<typename ClassT, typename MemPtrT>
 function<ReturnT(ArgTs...)>::function(ClassT&& object, MemPtrT member)
   : m_empty(false)
 {
-  if constexpr (std::is_pointer_v<ClassT>) { // this branch is unsafe, use std::shared_ptr<...>
-    using nonptr_class_t = std::remove_pointer_t<ClassT>;
-    static_assert(sizeof(member_function_smart_pointer<nonptr_class_t, MemPtrT, ReturnT, ArgTs...>) <=
-                    HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
-                  HANDLEBARS_FUNCTION_ERROR);
-    new (access())
-      member_function_raw_pointer<nonptr_class_t, MemPtrT, ReturnT, ArgTs...>(std::forward<ClassT>(object), member);
-  } else {
-    static_assert(sizeof(member_function<ClassT, MemPtrT, ReturnT, ArgTs...>) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
-                  HANDLEBARS_FUNCTION_ERROR);
-    new (access()) member_function<ClassT, MemPtrT, ReturnT, ArgTs...>(std::forward<ClassT>(object), member);
-  }
+  static_assert(sizeof(member_function<ClassT, MemPtrT, ReturnT, ArgTs...>) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
+                HANDLEBARS_FUNCTION_ERROR);
+  new (access()) member_function<ClassT, MemPtrT, ReturnT, ArgTs...>(std::forward<ClassT>(object), member);
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -321,22 +348,36 @@ template<typename ClassT>
 function<ReturnT(ArgTs...)>::function(ClassT&& object)
   : m_empty(false)
 {
-  if constexpr (std::is_pointer_v<ClassT>) { // this branch is unsafe, use std::shared_ptr<...>
-    using nonptr_class_t = std::remove_pointer_t<ClassT>;
-    using call_operator_ptr_t = typename sfinae::generic_call_operator<nonptr_class_t, ReturnT, ArgTs...>::type;
-    static_assert(sizeof(member_function_smart_pointer<nonptr_class_t, call_operator_ptr_t, ReturnT, ArgTs...>) <=
-                    HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
-                  HANDLEBARS_FUNCTION_ERROR);
-    new (access()) member_function_raw_pointer<nonptr_class_t, call_operator_ptr_t, ReturnT, ArgTs...>(
-      std::forward<ClassT>(object), &nonptr_class_t::operator());
-  } else {
-    using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
-    static_assert(sizeof(member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
-                    HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
-                  HANDLEBARS_FUNCTION_ERROR);
-    new (access()) member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(std::forward<ClassT>(object),
-                                                                                   &ClassT::operator());
-  }
+  using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
+  static_assert(sizeof(member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
+                  HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
+                HANDLEBARS_FUNCTION_ERROR);
+  new (access())
+    member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(std::forward<ClassT>(object), &ClassT::operator());
+}
+
+template<typename ReturnT, typename... ArgTs>
+template<typename ClassT, typename MemPtrT>
+function<ReturnT(ArgTs...)>::function(ClassT* object, MemPtrT member)
+  : m_empty(false)
+{
+  static_assert(sizeof(member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>) <=
+                  HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
+                HANDLEBARS_FUNCTION_ERROR);
+  new (access()) member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
+}
+
+template<typename ReturnT, typename... ArgTs>
+template<typename ClassT>
+function<ReturnT(ArgTs...)>::function(ClassT* object)
+  : m_empty(false)
+{
+  using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
+  static_assert(sizeof(member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
+                  HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
+                HANDLEBARS_FUNCTION_ERROR);
+  new (access())
+    member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -431,12 +472,13 @@ function<ReturnT(ArgTs...)>::operator=(function<ReturnT(ArgTs...)>&& rhs) noexce
 }
 
 template<typename ReturnT, typename... ArgTs>
+template<typename... FwdArgTs>
 ReturnT
-function<ReturnT(ArgTs...)>::operator()(ArgTs&&... arguments)
+function<ReturnT(ArgTs...)>::operator()(FwdArgTs&&... arguments)
 {
   if (m_empty)
     throw empty_function{};
   else
-    return access()->operator()(std::forward<ArgTs>(arguments)...);
+    return access()->operator()(std::forward<FwdArgTs>(arguments)...);
 }
 }
