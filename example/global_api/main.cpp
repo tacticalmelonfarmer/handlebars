@@ -1,54 +1,75 @@
 #define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE 64
 #include <handlebars/dispatcher.hpp>
 #include <handlebars/handler.hpp>
+
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 // signal type to handle events for
-enum class my_signals
+enum logging_signals
 {
   open,
-  print,
-  close
+  write,
+  close,
+  select
 };
 
 // class which implements various event handlers and connects them to a dispatcher
-struct my_event_handler : public handlebars::handler<my_event_handler, my_signals, const std::string&>
+struct logger : public handlebars::handler<logger, logging_signals, const std::string&>
 {
-  void open(const std::string& Name, const std::string& Msg)
+  logger(const std::filesystem::path& log_directory)
+    : m_log_directory(log_directory)
   {
-    std::cout << "Hello, " << Name << "!" << std::endl;
-    std::cout << Msg << "\n";
+    connect(open, &logger::open_file);
+    connect(write, &logger::write_data);
+    connect(close, &logger::close_file);
+    connect(select, &logger::select_file);
   }
-  void print(const std::string& Msg) { std::cout << Msg << "\n"; }
-  void close(const std::string& Name, const std::string& Msg)
+  void open_file(const std::string& file)
   {
-    std::cout << "Goodbye " << Name << "."
-              << "\n";
-    std::cout << Msg << "\n";
+    if (m_open_files.count(file))
+      return;
+    m_open_files.emplace(file, m_log_directory / file);
+  }
+  void close_file(const std::string& file)
+  {
+    if (m_open_files.count(file))
+      m_open_files[file].close();
   }
 
-  my_event_handler(const std::string& Name)
-    : bound_name(Name)
+  void select_file(const std::string& file)
   {
-    connect_bind(my_signals::open, &my_event_handler::open, bound_name);
-    connect(my_signals::print, &my_event_handler::print);
-    connect_bind(my_signals::close, &my_event_handler::close, bound_name);
+    if (m_open_files.count(file))
+      m_selected_file = file;
   }
+
+  void write_data(const std::string& data) { m_open_files[m_selected_file] << data; }
 
 private:
-  const std::string bound_name;
+  std::filesystem::path m_log_directory;
+  std::unordered_map<std::string, std::fstream> m_open_files;
+  std::string m_selected_file;
 };
 
 int
 main()
 {
-  using dispatcher = handlebars::dispatcher<my_signals, const std::string&>;
-  my_event_handler steve("Steve");
-  my_event_handler hank("Hank");
-  dispatcher::push_event(my_signals::open, "How are you?");
-  dispatcher::push_event(my_signals::print, "hmm...");
-  dispatcher::push_event(my_signals::close, "See you later.");
-  dispatcher::respond();
+  logger app_logs("./logs");
+  app_logs.push_event(open, "info.log");
+  app_logs.push_event(open, "warnings.log");
+  app_logs.push_event(open, "errors.log");
+  app_logs.push_event(select, "info.log");
+  app_logs.push_event(write, "application has started");
+  app_logs.push_event(close, "info.log");
+  app_logs.push_event(close, "warnings.log");
+  app_logs.push_event(close, "errors.log");
+
+  // std::cout << "Enter a newline to execute pending operations:\n";
+  // std::cin.get();
+
+  app_logs.respond();
   return 0;
 }

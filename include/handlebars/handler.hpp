@@ -24,7 +24,11 @@ struct handler
   slot_id_type connect_bind(const SignalT& signal, SlotT slot, BoundArgTs&&... bound_args);
 
   // pushes a new event onto the queue with a signal value and arguments, if any
-  void push_event(const SignalT& signal, SlotArgTs&&... args);
+  template<typename... FwdSlotArgTs>
+  void push_event(const SignalT& signal, FwdSlotArgTs&&... args);
+
+  // calls global dispatcher respond function
+  size_t respond(size_t limit = 0);
 
   // removes all events using a specific signal from the event queue, useful for preventing duplicates when pushing an
   // event
@@ -61,10 +65,18 @@ handler<DerivedT, SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, Sl
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
+template<typename... FwdSlotArgTs>
 void
-handler<DerivedT, SignalT, SlotArgTs...>::push_event(const SignalT& signal, SlotArgTs&&... args)
+handler<DerivedT, SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgTs&&... args)
 {
-  dispatcher<SignalT, SlotArgTs...>::push_event(signal, std::forward<SlotArgTs>(args)...);
+  dispatcher<SignalT, SlotArgTs...>::push_event(signal, std::forward<FwdSlotArgTs>(args)...);
+}
+
+template<typename DerivedT, typename SignalT, typename... SlotArgTs>
+size_t
+handler<DerivedT, SignalT, SlotArgTs...>::respond(size_t limit)
+{
+  return dispatcher<SignalT, SlotArgTs...>::respond(limit);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>

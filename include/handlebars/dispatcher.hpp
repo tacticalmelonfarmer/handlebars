@@ -104,7 +104,6 @@ private:
   static slot_map_type m_slot_map;
   static event_queue_type m_event_queue;
   static std::mutex m_slot_mutex, m_event_mutex;
-  static bool m_thread_pushing_event;
 };
 
 template<typename SignalT, typename... SlotArgTs>
@@ -118,9 +117,6 @@ std::mutex dispatcher<SignalT, SlotArgTs...>::m_slot_mutex = {};
 
 template<typename SignalT, typename... SlotArgTs>
 std::mutex dispatcher<SignalT, SlotArgTs...>::m_event_mutex = {};
-
-template<typename SignalT, typename... SlotArgTs>
-bool dispatcher<SignalT, SlotArgTs...>::m_thread_pushing_event = false;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,8 +141,10 @@ typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
 dispatcher<SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... args)
 {
   std::scoped_lock lock(m_slot_mutex);
-  m_slot_map[signal].emplace_back(std::move(
-    [&](SlotArgTs&&... args) { slot(std::forward<BoundArgTs>(bound_args)..., std::forward<SlotArgTs>(args)...) }));
+  m_slot_map[signal].emplace_back(
+    std::move([&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](SlotArgTs&&... args) {
+      std::apply(slot, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<SlotArgTs>(args)...)));
+    }));
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
@@ -156,7 +154,7 @@ typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
 dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal, ClassT* target, SlotT slot)
 {
   std::scoped_lock lock(m_slot_mutex);
-  m_slot_map[signal].emplace_back(std::forward<ClassT>(target), slot);
+  m_slot_map[signal].emplace_back(target, slot);
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
@@ -182,36 +180,25 @@ template<typename... FwdSlotArgTs>
 void
 dispatcher<SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgTs&&... args)
 {
-  m_thread_pushing_event = true;
-  {
-    std::scoped_lock lock(m_event_mutex);
-    m_event_queue.push_front(std::make_tuple(signal, std::make_tuple(std::forward<FwdSlotArgTs>(args)...)));
-  }
-  m_thread_pushing_event = false;
+  std::scoped_lock lock(m_event_mutex);
+  m_event_queue.push_front(std::make_tuple(signal, std::make_tuple(std::forward<FwdSlotArgTs>(args)...)));
 }
 
 template<typename SignalT, typename... SlotArgTs>
 size_t
 dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
 {
-  std::unique_lock<std::mutex> event_lock(m_event_mutex);
-  std::unique_lock<std::mutex> slot_lock(m_slot_mutex, std::defer_lock);
+  std::scoped_lock lock(m_event_mutex, m_slot_mutex);
   if (limit == 0)
     limit = m_event_queue.size();
-  for (size_t i = m_event_queue.size() - 1; limit != 0; --i, --limit) {
-    if (m_thread_pushing_event == true) {
-      event_lock.unlock();
-      // allow events to be pushed
-      event_lock.lock();
-    }
-    slot_lock.lock();
+  size_t progress = 0;
+  for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) {
     for (auto& slot : m_slot_map[std::get<0>(m_event_queue[i])]) // fire slot chain
     {
       std::apply(slot, std::get<1>(m_event_queue[i]));
     }
-    slot_lock.unlock();
-    m_event_queue.pop_back();
   }
+  m_event_queue.erase(m_event_queue.end() - progress, m_event_queue.end());
   return m_event_queue.size();
 }
 
