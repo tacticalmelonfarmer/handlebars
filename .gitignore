@@ -1,8 +1,8 @@
+.vs/
 .vscode/
 build/
 CMakeFiles/
 Makefile
 .clang-format
 tests/build/
-
 tests/
