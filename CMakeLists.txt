@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(handlebars LANGUAGES CXX)
 
-add_executable(global_api example/global_api/main.cpp)
-target_compile_features(global_api PUBLIC cxx_std_17)
-target_include_directories(global_api PUBLIC include)
+add_executable(logger example/logger/main.cpp)
+target_compile_features(logger PUBLIC cxx_std_17)
+target_include_directories(logger PUBLIC include)
 
-add_executable(minimal_api example/minimal_api/main.cpp)
-target_compile_features(minimal_api PUBLIC cxx_std_17)
-target_include_directories(minimal_api PUBLIC include)
+add_executable(arithmetic example/arithmetic/main.cpp)
+target_compile_features(arithmetic PUBLIC cxx_std_17)
+target_include_directories(arithmetic PUBLIC include)
