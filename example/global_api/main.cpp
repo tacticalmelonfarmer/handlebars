@@ -23,6 +23,7 @@ struct logger : public handlebars::handler<logger, logging_signals, const std::s
   logger(const std::filesystem::path& log_directory)
     : m_log_directory(log_directory)
   {
+    std::filesystem::create_directory(log_directory);
     connect(open, &logger::open_file);
     connect(write, &logger::write_data);
     connect(close, &logger::close_file);
@@ -32,7 +33,7 @@ struct logger : public handlebars::handler<logger, logging_signals, const std::s
   {
     if (m_open_files.count(file))
       return;
-    m_open_files.emplace(file, m_log_directory / file);
+    m_open_files[file] = std::fstream(m_log_directory / file, std::ios::out);
   }
   void close_file(const std::string& file)
   {

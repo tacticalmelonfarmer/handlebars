@@ -51,12 +51,12 @@ struct dispatcher
   static slot_id_type connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... args);
 
   // associates a SignalT signal with a member function pointer of a class instance
-  template<typename ClassT, typename SlotT>
-  static slot_id_type connect_member(const SignalT& signal, ClassT* target, SlotT slot);
+  template<typename ClassT, typename MemPtrT>
+  static slot_id_type connect_member(const SignalT& signal, ClassT* object, MemPtrT member);
 
   // associates a SignalT signal with a member function pointer of a class instance, after binding arguments to it
-  template<typename ClassT, typename SlotT, typename... BoundArgTs>
-  static slot_id_type connect_bind_member(const SignalT& signal, ClassT* target, SlotT slot, BoundArgTs&&... args);
+  template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
+  static slot_id_type connect_bind_member(const SignalT& signal, ClassT* object, MemPtrT member, BoundArgTs&&... args);
 
   // pushes a new event onto the queue with a signal value and arguments, if any
   template<typename... FwdSlotArgTs>
@@ -149,27 +149,27 @@ dispatcher<SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT&& s
 }
 
 template<typename SignalT, typename... SlotArgTs>
-template<typename ClassT, typename SlotT>
+template<typename ClassT, typename MemPtrT>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
-dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal, ClassT* target, SlotT slot)
+dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal, ClassT* object, MemPtrT member)
 {
   std::scoped_lock lock(m_slot_mutex);
-  m_slot_map[signal].emplace_back(target, slot);
+  m_slot_map[signal].emplace_back(object, member);
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
 template<typename SignalT, typename... SlotArgTs>
-template<typename ClassT, typename SlotT, typename... BoundArgTs>
+template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
 dispatcher<SignalT, SlotArgTs...>::connect_bind_member(const SignalT& signal,
-                                                       ClassT* target,
-                                                       SlotT slot,
+                                                       ClassT* object,
+                                                       MemPtrT member,
                                                        BoundArgTs&&... bound_args)
 {
   std::scoped_lock lock(m_slot_mutex);
   m_slot_map[signal].emplace_back(
     [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](SlotArgTs&&... args) {
-      std::apply(function(target, slot),
+      std::apply(function(object, member),
                  std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<SlotArgTs>(args)...)));
     });
   return std::make_tuple(signal, --m_slot_map[signal].end());
@@ -192,13 +192,16 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
   if (limit == 0)
     limit = m_event_queue.size();
   size_t progress = 0;
-  for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) {
-    for (auto& slot : m_slot_map[std::get<0>(m_event_queue[i])]) // fire slot chain
+  for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) { // iterate over events
+    auto& current_event = m_event_queue[i];
+    for (auto& slot : m_slot_map[std::get<0>(current_event)]) // fire slot chain for each event
     {
-      std::apply(slot, std::get<1>(m_event_queue[i]));
+      std::apply(slot, std::get<1>(current_event));
     }
+    m_event_queue.pop_back(); // current_event is now dangling
+    if (i == 0)
+      break;
   }
-  m_event_queue.erase(m_event_queue.end() - progress, m_event_queue.end());
   return m_event_queue.size();
 }
 
