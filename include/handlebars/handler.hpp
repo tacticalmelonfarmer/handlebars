@@ -30,10 +30,6 @@ struct handler
   // calls global dispatcher respond function
   size_t respond(size_t limit = 0);
 
-  // removes all events using a specific signal from the event queue, useful for preventing duplicates when pushing an
-  // event
-  void purge_events(const SignalT& signal);
-
   // destructor, removes slots that correspond to this class instance from global dispatcher
   ~handler();
 
@@ -77,13 +73,6 @@ size_t
 handler<DerivedT, SignalT, SlotArgTs...>::respond(size_t limit)
 {
   return dispatcher<SignalT, SlotArgTs...>::respond(limit);
-}
-
-template<typename DerivedT, typename SignalT, typename... SlotArgTs>
-void
-handler<DerivedT, SignalT, SlotArgTs...>::purge_events(const SignalT& signal)
-{
-  dispatcher<SignalT, SlotArgTs...>::purge_events(signal);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>

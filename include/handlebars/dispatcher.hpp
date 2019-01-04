@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <atomic>
 #include <list>
 #include <mutex>
 #include <queue>
@@ -48,7 +50,7 @@ struct dispatcher
 
   // associates a SignalT signal with a callable entity, after binding arguments to it
   template<typename SlotT, typename... BoundArgTs>
-  static slot_id_type connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... args);
+  static slot_id_type connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... bound_args);
 
   // associates a SignalT signal with a member function pointer of a class instance
   template<typename ClassT, typename MemPtrT>
@@ -56,7 +58,10 @@ struct dispatcher
 
   // associates a SignalT signal with a member function pointer of a class instance, after binding arguments to it
   template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
-  static slot_id_type connect_bind_member(const SignalT& signal, ClassT* object, MemPtrT member, BoundArgTs&&... args);
+  static slot_id_type connect_bind_member(const SignalT& signal,
+                                          ClassT* object,
+                                          MemPtrT member,
+                                          BoundArgTs&&... bound_args);
 
   // pushes a new event onto the queue with a signal value and arguments, if any
   template<typename... FwdSlotArgTs>
@@ -68,9 +73,6 @@ struct dispatcher
 
   //  this removes an event handler from a slot list
   static void disconnect(const slot_id_type& slot_id);
-
-  // remove all pending events of a specific type
-  static void purge_events(const SignalT& signal);
 
   // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
   static event_queue_type transform_events(const function<event_transform_operation(event_type&)>& pred)
@@ -104,6 +106,8 @@ private:
   static slot_map_type m_slot_map;
   static event_queue_type m_event_queue;
   static std::mutex m_slot_mutex, m_event_mutex;
+
+  static std::atomic<size_t> m_threads_pushing_event;
 };
 
 template<typename SignalT, typename... SlotArgTs>
@@ -117,6 +121,9 @@ std::mutex dispatcher<SignalT, SlotArgTs...>::m_slot_mutex = {};
 
 template<typename SignalT, typename... SlotArgTs>
 std::mutex dispatcher<SignalT, SlotArgTs...>::m_event_mutex = {};
+
+template<typename SignalT, typename... SlotArgTs>
+std::atomic<size_t> dispatcher<SignalT, SlotArgTs...>::m_threads_pushing_event = 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,7 +145,7 @@ dispatcher<SignalT, SlotArgTs...>::connect(const SignalT& signal, SlotT&& slot)
 template<typename SignalT, typename... SlotArgTs>
 template<typename SlotT, typename... BoundArgTs>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
-dispatcher<SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... args)
+dispatcher<SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... bound_args)
 {
   std::scoped_lock lock(m_slot_mutex);
   m_slot_map[signal].emplace_back(
@@ -180,6 +187,7 @@ template<typename... FwdSlotArgTs>
 void
 dispatcher<SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgTs&&... args)
 {
+  m_threads_pushing_event += 1;
   std::scoped_lock lock(m_event_mutex);
   m_event_queue.push_front(std::make_tuple(signal, std::make_tuple(std::forward<FwdSlotArgTs>(args)...)));
 }
@@ -188,21 +196,54 @@ template<typename SignalT, typename... SlotArgTs>
 size_t
 dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
 {
-  std::scoped_lock lock(m_event_mutex, m_slot_mutex);
-  if (limit == 0)
-    limit = m_event_queue.size();
-  size_t progress = 0;
-  for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) { // iterate over events
-    auto& current_event = m_event_queue[i];
-    for (auto& slot : m_slot_map[std::get<0>(current_event)]) // fire slot chain for each event
-    {
-      std::apply(slot, std::get<1>(current_event));
+  std::scoped_lock slot_lock(m_slot_mutex);
+  std::unique_lock<std::mutex> event_lock(m_event_mutex);
+  if (limit == 0) { // respond to an unlimited amount of events
+    for (size_t i = m_event_queue.size() - 1;; --i) {
+      {
+        auto& current_event = m_event_queue[i];
+        for (auto& slot : m_slot_map[std::get<0>(current_event)]) {
+          std::apply(slot, std::get<1>(current_event));
+        }
+      }
+      m_event_queue.pop_back();
+      // Here we test for any threads pushing event
+      if (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
+        size_t old_queue_size = m_event_queue.size();
+        event_lock.unlock();
+        event_lock.lock();
+        size_t diff = m_event_queue.size() - old_queue_size;
+        i += diff;
+        m_threads_pushing_event -= 1;
+      }
+      if (i == 0)
+        break;
     }
-    m_event_queue.pop_back(); // current_event is now dangling
-    if (i == 0)
-      break;
+    return m_event_queue.size();
+  } else { // respond to a limited amount of events
+    size_t progress = 0;
+    for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) {
+      {
+        auto& current_event = m_event_queue[i];
+        for (auto& slot : m_slot_map[std::get<0>(current_event)]) {
+          std::apply(slot, std::get<1>(current_event));
+        }
+      }
+      m_event_queue.pop_back();
+      // Here we test for any threads pushing event
+      if (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
+        size_t old_queue_size = m_event_queue.size();
+        event_lock.unlock();
+        event_lock.lock();
+        size_t diff = m_event_queue.size() - old_queue_size;
+        i += diff;
+        m_threads_pushing_event -= 1;
+      }
+      if (i == 0)
+        break;
+    }
+    return m_event_queue.size();
   }
-  return m_event_queue.size();
 }
 
 template<typename SignalT, typename... SlotArgTs>
@@ -211,15 +252,5 @@ dispatcher<SignalT, SlotArgTs...>::disconnect(const slot_id_type& slot_id)
 {
   std::scoped_lock lock(m_slot_mutex);
   m_slot_map[std::get<0>(slot_id)].erase(std::get<1>(slot_id));
-}
-
-template<typename SignalT, typename... SlotArgTs>
-void
-dispatcher<SignalT, SlotArgTs...>::purge_events(const SignalT& signal)
-{
-  while (m_event_queue.size()) {
-    if (std::get<0>(m_event_queue.front()) == signal)
-      m_event_queue.pop();
-  }
 }
 }

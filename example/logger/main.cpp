@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 // signal type to handle events for
-enum logging_signals
+enum class signals
 {
   open,
   write,
@@ -18,16 +18,16 @@ enum logging_signals
 };
 
 // class which implements various event handlers and connects them to a dispatcher
-struct logger : public handlebars::handler<logger, logging_signals, const std::string&>
+struct logger : public handlebars::handler<logger, signals, const std::string&>
 {
   logger(const std::filesystem::path& log_directory)
     : m_log_directory(log_directory)
   {
     std::filesystem::create_directory(log_directory);
-    connect(open, &logger::open_file);
-    connect(write, &logger::write_data);
-    connect(close, &logger::close_file);
-    connect(select, &logger::select_file);
+    connect(signals::open, &logger::open_file);
+    connect(signals::write, &logger::write_data);
+    connect(signals::close, &logger::close_file);
+    connect(signals::select, &logger::select_file);
   }
   void open_file(const std::string& file)
   {
@@ -59,17 +59,17 @@ int
 main()
 {
   logger app_logs("./logs");
-  app_logs.push_event(open, "info.log");
-  app_logs.push_event(open, "warnings.log");
-  app_logs.push_event(open, "errors.log");
-  app_logs.push_event(select, "info.log");
-  app_logs.push_event(write, "application has started");
-  app_logs.push_event(close, "info.log");
-  app_logs.push_event(close, "warnings.log");
-  app_logs.push_event(close, "errors.log");
+  app_logs.push_event(signals::open, "info.log");
+  app_logs.push_event(signals::open, "warnings.log");
+  app_logs.push_event(signals::open, "errors.log");
+  app_logs.push_event(signals::select, "info.log");
+  app_logs.push_event(signals::write, "application has started");
+  app_logs.push_event(signals::close, "info.log");
+  app_logs.push_event(signals::close, "warnings.log");
+  app_logs.push_event(signals::close, "errors.log");
 
-  // std::cout << "Enter a newline to execute pending operations:\n";
-  // std::cin.get();
+  std::cout << "Enter a newline to execute pending operations:\n";
+  std::cin.get();
 
   app_logs.respond();
   return 0;
