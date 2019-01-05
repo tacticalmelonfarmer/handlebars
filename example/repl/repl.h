@@ -10,12 +10,24 @@ tokenize(const std::string& input)
 {
   std::string work;
   std::vector<std::string> result;
-  for (const auto& c : input) {
-    if (std::isspace(c)) {
+  bool in_quote = false;
+  for (auto c = input.begin(); c != input.end(); ++c) {
+    if (c == input.end()) {
+      break;
+    }
+    if (*c == '\\') { // for escaping character sequences
+      work += *(++c);
+      continue;
+    }
+    if (*c == '"') { // start and end a quoted token
+      in_quote = (in_quote) ? false : true;
+      continue;
+    }
+    if (std::isspace(*c) && !in_quote) { // end, push and then start a new token
       result.push_back(work);
       work.clear();
-    } else {
-      work += c;
+    } else { // append char to current token
+      work += *c;
     }
   }
   result.push_back(work);
@@ -34,7 +46,6 @@ struct repl
       for (auto t = argv.begin() + 1; t != argv.end(); ++t) {
         std::cout << *t << '\n';
       }
-      std::cout << std::endl;
     });
   }
 
