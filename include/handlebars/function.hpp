@@ -479,6 +479,6 @@ function<ReturnT(ArgTs...)>::operator()(FwdArgTs&&... arguments)
   if (m_empty)
     throw empty_function{};
   else
-    return access()->operator()(std::forward<FwdArgTs>(arguments)...);
+    return access()->operator()(std::forward<ArgTs>(arguments)...);
 }
 }

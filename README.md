@@ -4,7 +4,7 @@ This is a header only library, using C++17 features.
 Handlebars provides mechanisms for having global event handlers of a single signature interface, although being a templated global interface you can handle as many signature types as you see fit.
 
 ### Dispatcher
-the global interface is found in *include/handlebars/dispatcher.hpp*.
+the global interface is found in **include/handlebars/dispatcher.hpp**.
 The interface is a single class with static member functions and static data. 
 An event handler can be a free/static member function, 
 a member function bound to an instance, a lambda or 
@@ -15,7 +15,7 @@ as `connect` or `push_event`
 
 ### Handler
 There is another interface found in 
-*include/handlebars/handler.hpp* that hides the 
+**include/handlebars/handler.hpp** that hides the 
 global interface. A class can derive from it. 
 It uses the *crtp* to
 make the syntax of adding a member function 

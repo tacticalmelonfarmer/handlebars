@@ -198,6 +198,8 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
 {
   std::scoped_lock slot_lock(m_slot_mutex);
   std::unique_lock<std::mutex> event_lock(m_event_mutex);
+  if (m_event_queue.size() == 0)
+    return 0;
   if (limit == 0) { // respond to an unlimited amount of events
     for (size_t i = m_event_queue.size() - 1;; --i) {
       {
