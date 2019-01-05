@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.10)
 
 project(handlebars LANGUAGES CXX)
 
-find_package(Threads)
-
 add_executable(logger example/logger/main.cpp)
 target_compile_features(logger PUBLIC cxx_std_17)
 target_include_directories(logger PUBLIC include)
