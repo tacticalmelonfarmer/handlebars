@@ -102,7 +102,7 @@ struct dispatcher
   //  this removes an event handler from a slot list
   static void disconnect(const slot_id_type& slot_id);
 
-  // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
+  /* // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
   static event_queue_type transform_events(const function<event_transform_operation(event_type&)>& pred)
   {
     event_queue_type result;
@@ -125,7 +125,7 @@ struct dispatcher
     });
     m_event_queue.erase(new_end, m_event_queue.end());
     return result;
-  }
+  } */
 
 private:
   // singleton signtature
