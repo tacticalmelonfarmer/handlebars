@@ -24,7 +24,7 @@ struct arg_storage
 template<typename T>
 struct arg_storage<T&&>
 {
-  using type = T;
+  using type = T&&;
 };
 template<typename T>
 struct arg_storage<const T&>
