@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <list>
 #include <mutex>
 #include <queue>
@@ -14,6 +15,31 @@
 
 namespace handlebars {
 
+inline namespace detail {
+template<typename T>
+struct arg_storage
+{
+  using type = T;
+};
+template<typename T>
+struct arg_storage<T&&>
+{
+  using type = T;
+};
+template<typename T>
+struct arg_storage<const T&>
+{
+  using type = T;
+};
+template<typename T>
+struct arg_storage<T&>
+{
+  using type = T&;
+};
+template<typename T>
+using arg_storage_t = typename arg_storage<T>::type;
+}
+
 enum class event_transform_operation
 {
   modified, // does nothing yet, besides indicating a modification was made without changing the layout
@@ -25,21 +51,23 @@ template<typename SignalT, typename... SlotArgTs>
 struct dispatcher
 {
   // signal differentiaties the type of event that is happening
+  // preferably use a type that is cheap to copy
   using signal_type = SignalT;
-  // a slot is an event handler which can take arguments and has NO RETURN VALUE
+  // a slot is an event handler which can take arguments and has NO RETURN VALUE.
+  // see "function.hpp"
   using slot_type = function<void(SlotArgTs...)>;
-  // this tuple packs arguments that will be pack with a signal and passed to an event handler
-  using args_storage_type = std::tuple<std::remove_reference_t<SlotArgTs>...>;
-  // a slot list is a sequence of event handlers that will be called consecutively to handle an event
-  // list is used here to prevent invalidating iterators when calling a handler destructor, which removes slots from a
-  // slot list
+  // this tuple holds the data which will be passed to the slot
+  using args_storage_type = std::tuple<arg_storage_t<SlotArgTs>...>;
+  // a slot list is a sequence of slots that will be called consecutively to handle an event.
+  // std::list is used here to prevent invalidating iterators when calling a handler<...> destructor, which removes
+  // slots from a slot list
   using slot_list_type = std::list<slot_type>;
   // slot id  is a signal and an iterator to a slot packed together to make slot removal easier when calling
   // "disconnect" globally or from handler base class
   using slot_id_type = std::tuple<SignalT, typename slot_list_type::iterator>;
   // slot map, simply maps signals to their corresponding slot lists
   using slot_map_type = std::unordered_map<SignalT, slot_list_type>;
-  // events hold all relevant data used to call an event handler
+  // events hold all relevant data to call a slot list
   using event_type = std::tuple<signal_type, args_storage_type>;
   // event queue is a modify-able fifo queue that stores events
   using event_queue_type = std::deque<event_type>;
@@ -189,13 +217,14 @@ dispatcher<SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgT
 {
   m_threads_pushing_event += 1;
   std::scoped_lock lock(m_event_mutex);
-  m_event_queue.push_front(std::make_tuple(signal, std::make_tuple(std::forward<FwdSlotArgTs>(args)...)));
+  m_event_queue.push_front(std::make_tuple(signal, std::forward_as_tuple(std::forward<FwdSlotArgTs>(args)...)));
 }
 
 template<typename SignalT, typename... SlotArgTs>
 size_t
 dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
 {
+  using namespace std::chrono_literals;
   std::scoped_lock slot_lock(m_slot_mutex);
   std::unique_lock<std::mutex> event_lock(m_event_mutex);
   if (m_event_queue.size() == 0)
@@ -213,6 +242,7 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       if (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
         size_t old_queue_size = m_event_queue.size();
         event_lock.unlock();
+        std::this_thread::sleep_for(1ns);
         event_lock.lock();
         size_t diff = m_event_queue.size() - old_queue_size;
         i += diff;
@@ -233,9 +263,10 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       }
       m_event_queue.pop_back();
       // Here we test for any threads pushing event
-      if (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
+      while (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
         size_t old_queue_size = m_event_queue.size();
         event_lock.unlock();
+        std::this_thread::sleep_for(1ns);
         event_lock.lock();
         size_t diff = m_event_queue.size() - old_queue_size;
         i += diff;
