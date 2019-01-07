@@ -1,4 +1,3 @@
-#define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE 64
 #include <handlebars/dispatcher.hpp>
 #include <handlebars/handler.hpp>
 

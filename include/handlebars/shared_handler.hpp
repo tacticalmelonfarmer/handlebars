@@ -1,16 +1,15 @@
 #pragma once
 
 #include "dispatcher.hpp"
+#include <memory>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 namespace handlebars {
 
-// handler is a crtp style class which turns the derived class into a global event handler
-// DerivedT must be the same type as the class which inherits this class
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
-struct handler
+struct shared_handler : std::enable_shared_from_this<DerivedT>
 {
   // see dispatcher.hpp
   using slot_id_type = typename dispatcher<SignalT, SlotArgTs...>::slot_id_type;
@@ -30,11 +29,9 @@ struct handler
   // calls global dispatcher respond function
   size_t respond(size_t limit = 0);
 
-  // destructor, removes slots that correspond to this class instance from global dispatcher
-  ~handler();
-
-private:
-  std::vector<slot_id_type> m_slots;
+  // NOTE: shared_handler, unlike handler, has a noop destructor. when this instance is destroyed
+  // enable_shared_from_this's destructor keeps this object alive through shared_ptr until the global dispatcher is
+  // destroyed.
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,43 +40,36 @@ private:
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 template<typename MemPtrT>
-typename handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
-handler<DerivedT, SignalT, SlotArgTs...>::connect(const SignalT& signal, MemPtrT slot)
+typename shared_handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
+shared_handler<DerivedT, SignalT, SlotArgTs...>::connect(const SignalT& signal, MemPtrT slot)
 {
-  m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_member(signal, static_cast<DerivedT*>(this), slot));
-  return m_slots.back();
+  return dispatcher<SignalT, SlotArgTs...>::connect_member(
+    signal, std::make_shared<DerivedT>(static_cast<DerivedT&>(*this)), slot);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 template<typename MemPtrT, typename... BoundArgTs>
-typename handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
-handler<DerivedT, SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, MemPtrT slot, BoundArgTs&&... bound_args)
+typename shared_handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
+shared_handler<DerivedT, SignalT, SlotArgTs...>::connect_bind(const SignalT& signal,
+                                                              MemPtrT slot,
+                                                              BoundArgTs&&... bound_args)
 {
-  m_slots.push_back(dispatcher<SignalT, SlotArgTs...>::connect_bind_member(
-    signal, static_cast<DerivedT*>(this), slot, std::forward<BoundArgTs>(bound_args)...));
-  return m_slots.back();
+  return dispatcher<SignalT, SlotArgTs...>::connect_bind_member(
+    signal, std::make_shared<DerivedT>(static_cast<DerivedT&>(*this)), slot, std::forward<BoundArgTs>(bound_args)...);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 template<typename... FwdSlotArgTs>
 void
-handler<DerivedT, SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgTs&&... args)
+shared_handler<DerivedT, SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgTs&&... args)
 {
   dispatcher<SignalT, SlotArgTs...>::push_event(signal, std::forward<FwdSlotArgTs>(args)...);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
 size_t
-handler<DerivedT, SignalT, SlotArgTs...>::respond(size_t limit)
+shared_handler<DerivedT, SignalT, SlotArgTs...>::respond(size_t limit)
 {
   return dispatcher<SignalT, SlotArgTs...>::respond(limit);
-}
-
-template<typename DerivedT, typename SignalT, typename... SlotArgTs>
-handler<DerivedT, SignalT, SlotArgTs...>::~handler()
-{
-  for (auto& handle : m_slots) {
-    dispatcher<SignalT, SlotArgTs...>::disconnect(handle);
-  }
 }
 }

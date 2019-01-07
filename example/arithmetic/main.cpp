@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <cmath>
 #include <handlebars/handler.hpp>
 #include <iostream>

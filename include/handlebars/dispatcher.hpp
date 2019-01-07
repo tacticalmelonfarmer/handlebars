@@ -40,7 +40,7 @@ template<typename T>
 using arg_storage_t = typename arg_storage<T>::type;
 }
 
-enum class event_transform_operation
+enum class event_transform
 {
   modified, // does nothing yet, besides indicating a modification was made without changing the layout
   erase,    // tells `transform_events` to erase the current element
@@ -72,7 +72,7 @@ struct dispatcher
   // event queue is a modify-able fifo queue that stores events
   using event_queue_type = std::deque<event_type>;
 
-  // associates a SignalT signal with a callable entity
+  // associates a SignalT signal with a callable entity (any lambda, free function, static member function)
   template<typename SlotT>
   static slot_id_type connect(const SignalT& signal, SlotT&& slot);
 
@@ -81,13 +81,15 @@ struct dispatcher
   static slot_id_type connect_bind(const SignalT& signal, SlotT&& slot, BoundArgTs&&... bound_args);
 
   // associates a SignalT signal with a member function pointer of a class instance
+  // ClassT must be either a raw pointer or shared_ptr
   template<typename ClassT, typename MemPtrT>
-  static slot_id_type connect_member(const SignalT& signal, ClassT* object, MemPtrT member);
+  static slot_id_type connect_member(const SignalT& signal, ClassT&& object, MemPtrT member);
 
   // associates a SignalT signal with a member function pointer of a class instance, after binding arguments to it
+  // ClassT must be either a raw pointer or shared_ptr
   template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
   static slot_id_type connect_bind_member(const SignalT& signal,
-                                          ClassT* object,
+                                          ClassT&& object,
                                           MemPtrT member,
                                           BoundArgTs&&... bound_args);
 
@@ -103,16 +105,16 @@ struct dispatcher
   static void disconnect(const slot_id_type& slot_id);
 
   /* // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
-  static event_queue_type transform_events(const function<event_transform_operation(event_type&)>& pred)
+  static event_queue_type update_events(const function<event_transform(event_type&)>& pred)
   {
     event_queue_type result;
     std::vector<size_t> to_be_erased;
     std::scoped_lock lock(m_event_mutex);
     for (size_t i = 0; i < m_event_queue.size(); ++i) {
       auto op = pred(m_event_queue[i]);
-      if (op == event_transform_operation::erase)
+      if (op == event_transform::erase)
         to_be_erased.push_back(i);
-      else if (op == event_transform_operation::copy)
+      else if (op == event_transform::copy)
         result.push_back(m_event_queue[i]);
     }
     auto new_end = std::remove_if(m_event_queue.begin(), m_event_queue.end(), [&](auto) {
@@ -186,10 +188,10 @@ dispatcher<SignalT, SlotArgTs...>::connect_bind(const SignalT& signal, SlotT&& s
 template<typename SignalT, typename... SlotArgTs>
 template<typename ClassT, typename MemPtrT>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
-dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal, ClassT* object, MemPtrT member)
+dispatcher<SignalT, SlotArgTs...>::connect_member(const SignalT& signal, ClassT&& object, MemPtrT member)
 {
   std::scoped_lock lock(m_slot_mutex);
-  m_slot_map[signal].emplace_back(object, member);
+  m_slot_map[signal].emplace_back(std::forward<ClassT>(object), member);
   return std::make_tuple(signal, --m_slot_map[signal].end());
 }
 
@@ -197,14 +199,14 @@ template<typename SignalT, typename... SlotArgTs>
 template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
 typename dispatcher<SignalT, SlotArgTs...>::slot_id_type
 dispatcher<SignalT, SlotArgTs...>::connect_bind_member(const SignalT& signal,
-                                                       ClassT* object,
+                                                       ClassT&& object,
                                                        MemPtrT member,
                                                        BoundArgTs&&... bound_args)
 {
   std::scoped_lock lock(m_slot_mutex);
   m_slot_map[signal].emplace_back(
     [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](SlotArgTs&&... args) {
-      std::apply(function(object, member),
+      std::apply(function(std::forward<ClassT>(object), member),
                  std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<SlotArgTs>(args)...)));
     });
   return std::make_tuple(signal, --m_slot_map[signal].end());
@@ -242,7 +244,7 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       if (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
         size_t old_queue_size = m_event_queue.size();
         event_lock.unlock();
-        std::this_thread::sleep_for(1ns);
+        // std::this_thread::sleep_for(1ns);
         event_lock.lock();
         size_t diff = m_event_queue.size() - old_queue_size;
         i += diff;
@@ -266,7 +268,7 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       while (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
         size_t old_queue_size = m_event_queue.size();
         event_lock.unlock();
-        std::this_thread::sleep_for(1ns);
+        // std::this_thread::sleep_for(1ns);
         event_lock.lock();
         size_t diff = m_event_queue.size() - old_queue_size;
         i += diff;

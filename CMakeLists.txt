@@ -16,3 +16,7 @@ target_include_directories(arithmetic PUBLIC include)
 add_executable(repl example/repl/main.cpp)
 target_compile_features(repl PUBLIC cxx_std_17)
 target_include_directories(repl PUBLIC include)
+
+add_executable(sharing example/sharing/main.cpp)
+target_compile_features(sharing PUBLIC cxx_std_17)
+target_include_directories(sharing PUBLIC include)
