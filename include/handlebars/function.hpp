@@ -255,7 +255,7 @@ struct function<ReturnT(ArgTs...)>
 {
   using function_type = ReturnT(ArgTs...);
 
-  // copies/moves an object and holds a pointer to member function of the held object
+  // copies/moves an object and holds a pointer to non-static member function of the held object
   template<typename ClassT, typename MemPtrT>
   function(ClassT&& object, MemPtrT member);
 
@@ -271,7 +271,7 @@ struct function<ReturnT(ArgTs...)>
   template<typename ClassT>
   function(ClassT* object);
 
-  // points to a non-static member function using a pointer to member and pointer to parent object
+  // points to an object and holds a pointer to non-static member function of the held object
   template<typename ClassT, typename MemPtrT>
   function(std::shared_ptr<ClassT> object, MemPtrT member);
 
@@ -290,10 +290,10 @@ struct function<ReturnT(ArgTs...)>
     : m_empty(true)
   {}
 
-  // copy from another function<...>
+  // copy construct
   function(const function<ReturnT(ArgTs...)>& other);
 
-  // move from another function<...>
+  // move construct
   function(function<ReturnT(ArgTs...)>&& other) noexcept;
 
   // copy assignment
