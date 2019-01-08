@@ -14,6 +14,10 @@ struct shared_handler : std::enable_shared_from_this<DerivedT>
   // see dispatcher.hpp
   using slot_id_type = typename dispatcher<SignalT, SlotArgTs...>::slot_id_type;
 
+  shared_handler()
+    : m_ptr(std::make_shared<DerivedT>(static_cast<DerivedT&>(*this)))
+  {}
+
   // performs dispatcher<SignalT,SlotArgTs...>::connect_member(...) on a member function of the derived class
   template<typename MemPtrT>
   slot_id_type connect(const SignalT& signal, MemPtrT slot);
@@ -32,6 +36,8 @@ struct shared_handler : std::enable_shared_from_this<DerivedT>
   // NOTE: shared_handler, unlike handler, has a noop destructor. when this instance is destroyed
   // enable_shared_from_this's destructor keeps this object alive through shared_ptr until the global dispatcher is
   // destroyed.
+private:
+  std::shared_ptr<DerivedT> m_ptr;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +50,7 @@ typename shared_handler<DerivedT, SignalT, SlotArgTs...>::slot_id_type
 shared_handler<DerivedT, SignalT, SlotArgTs...>::connect(const SignalT& signal, MemPtrT slot)
 {
   return dispatcher<SignalT, SlotArgTs...>::connect_member(
-    signal, std::make_shared<DerivedT>(static_cast<DerivedT&>(*this)), slot);
+    signal, static_cast<DerivedT&>(*this).shared_from_this(), slot);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
@@ -55,7 +61,7 @@ shared_handler<DerivedT, SignalT, SlotArgTs...>::connect_bind(const SignalT& sig
                                                               BoundArgTs&&... bound_args)
 {
   return dispatcher<SignalT, SlotArgTs...>::connect_bind_member(
-    signal, std::make_shared<DerivedT>(static_cast<DerivedT&>(*this)), slot, std::forward<BoundArgTs>(bound_args)...);
+    signal, static_cast<DerivedT&>(*this).shared_from_this(), slot, std::forward<BoundArgTs>(bound_args)...);
 }
 
 template<typename DerivedT, typename SignalT, typename... SlotArgTs>
