@@ -12,24 +12,24 @@ enum class op
 };
 
 // class which handles various events through a global dispatcher
-struct arithmetic : public handlebars::handler<arithmetic, op, double&, double&&>
+struct arithmetic : public handlebars::handler<arithmetic, op, double&, const double&>
 {
-  void add(double& a, double&& b)
+  void add(double& a, const double& b)
   {
     a = a + b;
     std::cout << "add\n";
   }
-  void subtract(double& a, double&& b)
+  void subtract(double& a, const double& b)
   {
     a = a - b;
     std::cout << "subtract\n";
   }
-  void multiply(double& a, double&& b)
+  void multiply(double& a, const double& b)
   {
     a = a * b;
     std::cout << "multiply\n";
   }
-  void divide(double& a, double&& b)
+  void divide(double& a, const double& b)
   {
     a = a / b;
     std::cout << "divide\n";
@@ -47,10 +47,11 @@ struct arithmetic : public handlebars::handler<arithmetic, op, double&, double&&
 int
 main()
 {
-  using dispatcher = handlebars::dispatcher<op, double&, double&&>;
-  double a = 1.0;
+  using dispatcher = handlebars::dispatcher<op, double&, const double&>;
+  double a = 1.0, c = 0.0;
   arithmetic handler;
-  handler.push_event(op::add, a, 1.0);
+  handler.push_event(op::add, a, c);
+  c = 1.0;
   handler.push_event(op::subtract, a, 0.5);
   handler.push_event(op::multiply, a, 10.0);
   handler.push_event(op::divide, a, 2.0);

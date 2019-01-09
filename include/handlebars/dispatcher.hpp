@@ -9,6 +9,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "function.hpp"
@@ -16,6 +17,30 @@
 namespace handlebars {
 
 inline namespace detail {
+
+template<typename T>
+struct special_ref
+{
+  special_ref(T&& ref)
+    : m_ref(ref)
+  {}
+  special_ref(const T& ref)
+    : m_ref(&ref)
+  {}
+
+  operator const T&() const
+  {
+    if (std::holds_alternative<const T*>(m_ref)) {
+      return *std::get<const T*>(m_ref);
+    } else {
+      return std::get<T>(m_ref);
+    }
+  }
+
+private:
+  std::variant<T, const T*> m_ref;
+};
+
 template<typename T>
 struct arg_storage
 {
@@ -29,7 +54,7 @@ struct arg_storage<T&&>
 template<typename T>
 struct arg_storage<const T&>
 {
-  using type = T;
+  using type = special_ref<T>;
 };
 template<typename T>
 struct arg_storage<T&>
@@ -219,7 +244,8 @@ dispatcher<SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgT
 {
   m_threads_pushing_event += 1;
   std::scoped_lock lock(m_event_mutex);
-  m_event_queue.push_front(std::make_tuple(signal, std::forward_as_tuple(std::forward<FwdSlotArgTs>(args)...)));
+  m_event_queue.push_front(std::make_tuple(
+    signal, std::forward_as_tuple(static_cast<arg_storage_t<SlotArgTs>>(std::forward<FwdSlotArgTs>(args))...)));
 }
 
 template<typename SignalT, typename... SlotArgTs>
