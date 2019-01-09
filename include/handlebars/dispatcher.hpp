@@ -21,14 +21,14 @@ inline namespace detail {
 template<typename T>
 struct special_ref
 {
-  special_ref(T&& ref)
+  constexpr special_ref(T&& ref)
     : m_ref(ref)
   {}
-  special_ref(const T& ref)
+  constexpr special_ref(const T& ref)
     : m_ref(&ref)
   {}
 
-  operator const T&() const
+  constexpr operator const T&() const
   {
     if (std::holds_alternative<const T*>(m_ref)) {
       return *std::get<const T*>(m_ref);
@@ -38,7 +38,7 @@ struct special_ref
   }
 
 private:
-  std::variant<T, const T*> m_ref;
+  const std::variant<T, const T*> m_ref;
 };
 
 template<typename T>

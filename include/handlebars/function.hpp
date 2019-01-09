@@ -15,6 +15,8 @@
   "`HANDLEBARS_FUNCTION_COMMON_MAX_SIZE` "                                                                             \
   "before including this file"
 
+namespace handlebars {
+
 enum class function_source
 {
   free,
@@ -37,10 +39,29 @@ struct function_info
   const function_ownership ownership;
 };
 
+inline namespace detail {
+
+template<typename T>
+struct forward_ref
+{
+  constexpr forward_ref(T&& ref)
+    : m_ref(&ref)
+  {}
+  constexpr forward_ref(const T& ref)
+    : m_ref(&ref)
+  {}
+
+  constexpr operator const T&() const { return *m_ref; }
+
+private:
+  const T* m_ref;
+  ;
+};
+
 template<typename T>
 struct in_place_forward
 {
-  using type = T&&;
+  using type = forward_ref<T>;
 };
 
 template<typename T>
@@ -52,8 +73,6 @@ struct in_place_forward<T&>
 template<typename T>
 using in_place_forward_t = typename in_place_forward<T>::type;
 
-namespace handlebars {
-inline namespace detail {
 template<typename ReturnT, typename... ArgTs>
 struct function_base
 {
@@ -72,10 +91,7 @@ struct member_function : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (m_object.*m_member)(std::forward<ArgTs>(args)...);
-  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (m_object.*m_member)(args...); }
   function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(&m_object),
@@ -99,10 +115,7 @@ struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (m_object.get()->*m_member)(std::forward<ArgTs>(args)...);
-  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (m_object.get()->*m_member)(args...); }
   function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(m_object.get()),
@@ -126,10 +139,7 @@ struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (m_object->*m_member)(std::forward<ArgTs>(args)...);
-  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (m_object->*m_member)(args...); }
   function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(m_object),
@@ -150,10 +160,7 @@ struct free_function : function_base<ReturnT, ArgTs...>
   free_function(function_ptr_t pointer)
     : m_function_ptr(pointer)
   {}
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (*m_function_ptr)(std::forward<ArgTs>(args)...);
-  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (*m_function_ptr)(args...); }
   function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(nullptr),
@@ -479,6 +486,6 @@ function<ReturnT(ArgTs...)>::operator()(FwdArgTs&&... arguments)
   if (m_empty)
     throw empty_function{};
   else
-    return access()->operator()(std::forward<ArgTs>(arguments)...);
+    return access()->operator()(std::forward<FwdArgTs>(arguments)...);
 }
 }
