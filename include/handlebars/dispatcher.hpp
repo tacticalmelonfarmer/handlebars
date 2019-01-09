@@ -6,6 +6,7 @@
 #include <list>
 #include <mutex>
 #include <queue>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -22,7 +23,7 @@ template<typename T>
 struct special_ref
 {
   constexpr special_ref(T&& ref)
-    : m_ref(ref)
+    : m_ref(std::move(ref))
   {}
   constexpr special_ref(const T& ref)
     : m_ref(&ref)
@@ -122,44 +123,26 @@ struct dispatcher
   template<typename... FwdSlotArgTs>
   static void push_event(const SignalT& signal, FwdSlotArgTs&&... args);
 
-  // executes events and pops them off of the event queue the amount can be specified by limit, if limit is 0
-  // then all events are executed, returns number of events left on the queue
+  static size_t events_pending();
+
+  // handles events and pops them off of the event queue.
+  // the amount can be specified by limit.
+  // if limit is 0, then all events are executed.
+  // returns number of events that were succesfully handled
   static size_t respond(size_t limit = 0);
 
   //  this removes an event handler from a slot list
   static void disconnect(const slot_id_type& slot_id);
 
-  /* // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
-  static event_queue_type update_events(const function<event_transform(event_type&)>& pred)
-  {
-    event_queue_type result;
-    std::vector<size_t> to_be_erased;
-    std::scoped_lock lock(m_event_mutex);
-    for (size_t i = 0; i < m_event_queue.size(); ++i) {
-      auto op = pred(m_event_queue[i]);
-      if (op == event_transform::erase)
-        to_be_erased.push_back(i);
-      else if (op == event_transform::copy)
-        result.push_back(m_event_queue[i]);
-    }
-    auto new_end = std::remove_if(m_event_queue.begin(), m_event_queue.end(), [&](auto) {
-      static size_t index = 0;
-      static size_t erase_index = 0;
-      if (erase_index < to_be_erased.size())
-        return (index++ == to_be_erased[erase_index++]);
-      else
-        return false;
-    });
-    m_event_queue.erase(new_end, m_event_queue.end());
-    return result;
-  } */
+  // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
+  static event_queue_type update_events(const function<event_transform(event_type&)>& pred);
 
 private:
   // singleton signtature
   dispatcher() {}
 
   static slot_map_type m_slot_map;
-  static event_queue_type m_event_queue;
+  static event_queue_type m_event_queue, m_busy_queue;
   static std::mutex m_slot_mutex, m_event_mutex;
 
   static std::atomic<size_t> m_threads_pushing_event;
@@ -250,6 +233,14 @@ dispatcher<SignalT, SlotArgTs...>::push_event(const SignalT& signal, FwdSlotArgT
 
 template<typename SignalT, typename... SlotArgTs>
 size_t
+dispatcher<SignalT, SlotArgTs...>::events_pending()
+{
+  std::scoped_lock lock(m_event_mutex);
+  return m_event_queue.size();
+}
+
+template<typename SignalT, typename... SlotArgTs>
+size_t
 dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
 {
   using namespace std::chrono_literals;
@@ -258,7 +249,8 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
   if (m_event_queue.size() == 0)
     return 0;
   if (limit == 0) { // respond to an unlimited amount of events
-    for (size_t i = m_event_queue.size() - 1;; --i) {
+    size_t progress = 0;
+    for (size_t i = m_event_queue.size() - 1;; --i, ++progress) {
       {
         auto& current_event = m_event_queue[i];
         for (auto& slot : m_slot_map[std::get<0>(current_event)]) {
@@ -267,10 +259,10 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       }
       m_event_queue.pop_back();
       // Here we test for any threads pushing event
-      if (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
+      while (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
         size_t old_queue_size = m_event_queue.size();
         event_lock.unlock();
-        // std::this_thread::sleep_for(1ns);
+        std::this_thread::sleep_for(1ns);
         event_lock.lock();
         size_t diff = m_event_queue.size() - old_queue_size;
         i += diff;
@@ -279,7 +271,7 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       if (i == 0)
         break;
     }
-    return m_event_queue.size();
+    return progress;
   } else { // respond to a limited amount of events
     size_t progress = 0;
     for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) {
@@ -294,7 +286,7 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       while (m_threads_pushing_event.load(std::memory_order_relaxed) > 0) {
         size_t old_queue_size = m_event_queue.size();
         event_lock.unlock();
-        // std::this_thread::sleep_for(1ns);
+        std::this_thread::sleep_for(1ns);
         event_lock.lock();
         size_t diff = m_event_queue.size() - old_queue_size;
         i += diff;
@@ -303,7 +295,7 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
       if (i == 0)
         break;
     }
-    return m_event_queue.size();
+    return progress;
   }
 }
 
@@ -313,5 +305,32 @@ dispatcher<SignalT, SlotArgTs...>::disconnect(const slot_id_type& slot_id)
 {
   std::scoped_lock lock(m_slot_mutex);
   m_slot_map[std::get<0>(slot_id)].erase(std::get<1>(slot_id));
+}
+
+template<typename SignalT, typename... SlotArgTs>
+typename dispatcher<SignalT, SlotArgTs...>::event_queue_type
+dispatcher<SignalT, SlotArgTs...>::update_events(
+  const function<event_transform(typename dispatcher<SignalT, SlotArgTs...>::event_type&)>& pred)
+{
+  event_queue_type result;
+  std::vector<size_t> to_be_erased;
+  std::scoped_lock lock(m_event_mutex);
+  for (size_t i = 0; i < m_event_queue.size(); ++i) {
+    auto op = pred(m_event_queue[i]);
+    if (op == event_transform::erase)
+      to_be_erased.push_back(i);
+    else if (op == event_transform::copy)
+      result.push_back(m_event_queue[i]);
+  }
+  auto new_end = std::remove_if(m_event_queue.begin(), m_event_queue.end(), [&](auto) {
+    static size_t index = 0;
+    static size_t erase_index = 0;
+    if (erase_index < to_be_erased.size())
+      return (index++ == to_be_erased[erase_index++]);
+    else
+      return false;
+  });
+  m_event_queue.erase(new_end, m_event_queue.end());
+  return result;
 }
 }
