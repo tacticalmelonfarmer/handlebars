@@ -111,7 +111,7 @@ private:
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
 struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
 {
-  member_function_smart_pointer(std::shared_ptr<ClassT> object, MemPtrT member)
+  member_function_smart_pointer(const std::shared_ptr<ClassT>& object, MemPtrT member)
     : m_object(object)
     , m_member(member)
   {
