@@ -17,5 +17,8 @@ endif()
 add_executable(arithmetic example/arithmetic/main.cpp)
 target_link_libraries(arithmetic handlebars)
 
+add_executable(ordered example/ordered/main.cpp)
+target_link_libraries(ordered handlebars)
+
 add_executable(repl example/repl/main.cpp)
 target_link_libraries(repl handlebars)

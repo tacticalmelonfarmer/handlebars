@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <list>
@@ -135,14 +134,14 @@ struct dispatcher
   static void disconnect(const slot_id_type& slot_id);
 
   // this function iterates over the event queue with a predicate and modifies, erases, or copies elements
-  static event_queue_type update_events(const function<event_transform(event_type&)>& pred);
+  static void update_events(const function<void(event_queue_type&)>& updater);
 
 private:
   // singleton signtature
   dispatcher() {}
 
   static slot_map_type m_slot_map;
-  static event_queue_type m_event_queue, m_busy_queue;
+  static event_queue_type m_event_queue;
   static std::mutex m_slot_mutex, m_event_mutex;
 
   static std::atomic<size_t> m_threads_pushing_event;
@@ -308,29 +307,11 @@ dispatcher<SignalT, SlotArgTs...>::disconnect(const slot_id_type& slot_id)
 }
 
 template<typename SignalT, typename... SlotArgTs>
-typename dispatcher<SignalT, SlotArgTs...>::event_queue_type
+void
 dispatcher<SignalT, SlotArgTs...>::update_events(
-  const function<event_transform(typename dispatcher<SignalT, SlotArgTs...>::event_type&)>& pred)
+  const function<void(typename dispatcher<SignalT, SlotArgTs...>::event_queue_type&)>& updater)
 {
-  event_queue_type result;
-  std::vector<size_t> to_be_erased;
   std::scoped_lock lock(m_event_mutex);
-  for (size_t i = 0; i < m_event_queue.size(); ++i) {
-    auto op = pred(m_event_queue[i]);
-    if (op == event_transform::erase)
-      to_be_erased.push_back(i);
-    else if (op == event_transform::copy)
-      result.push_back(m_event_queue[i]);
-  }
-  auto new_end = std::remove_if(m_event_queue.begin(), m_event_queue.end(), [&](auto) {
-    static size_t index = 0;
-    static size_t erase_index = 0;
-    if (erase_index < to_be_erased.size())
-      return (index++ == to_be_erased[erase_index++]);
-    else
-      return false;
-  });
-  m_event_queue.erase(new_end, m_event_queue.end());
-  return result;
+  updater(m_event_queue);
 }
 }
