@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <list>
 #include <mutex>
 #include <queue>
@@ -278,7 +277,8 @@ dispatcher<SignalT, SlotArgTs...>::respond(size_t limit)
   }
   // here we load any events that were pushed by another thread while responding
   std::unique_lock tmp_lock(m_busy_mutex);
-  for (auto&& e : m_busy_queue) { // forwarding here allows us to transfer references without them decaying into values
+  for (auto i = m_busy_queue.rbegin(); i != m_busy_queue.rend(); ++i) {
+    auto&& e = *i; // forwarding here allows us to transfer references without them decaying into values
     m_event_queue.push_front(std::forward<decltype(e)>(e));
   }
   m_busy_queue.clear();
