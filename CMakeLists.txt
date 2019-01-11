@@ -14,6 +14,9 @@ if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     target_link_libraries(logger stdc++fs)
 endif()
 
+add_executable(edgewise example/edgewise/main.cpp)
+target_link_libraries(edgewise handlebars)
+
 add_executable(arithmetic example/arithmetic/main.cpp)
 target_link_libraries(arithmetic handlebars)
 

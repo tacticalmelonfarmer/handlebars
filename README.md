@@ -30,3 +30,6 @@ the fixed stack allocation size do `#define HANDLEBARS_FUNCTION_COMMON_MAX_SIZE`
 to be a positive integer literal that you would prefer.
 
 ##### Note: be careful when using `conect_bind` or `connect_bind_member` methods, as the stored callable will take up more stack space
+
+## Documentation
+in the **docs** folder in the root of this repository, i wrote a little guide on how to use this library
