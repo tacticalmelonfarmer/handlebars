@@ -8,7 +8,8 @@
 
 namespace handlebars {
 
-// handles is a crtp style class which turns the derived class into a global event handles
+// handles is a crtp style class which turns the derived class into a container for event handlers
+// and exposes some convenience functions
 // DerivedT must be the same type as the class which inherits this class
 template<typename DerivedT, typename SignalT, typename... HandlerArgTs>
 struct handles
@@ -16,6 +17,7 @@ struct handles
   // see dispatcher.hpp
   using handler_id_type = typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type;
 
+protected:
   // performs dispatcher<SignalT,HandlerArgTs...>::connect_member(...) on a member function of the derived class
   template<typename MemPtrT>
   handler_id_type connect(const SignalT& signal, MemPtrT handler);
@@ -24,6 +26,7 @@ struct handles
   template<typename MemPtrT, typename... BoundArgTs>
   handler_id_type connect_bind(const SignalT& signal, MemPtrT handler, BoundArgTs&&... bound_args);
 
+public:
   // pushes a new event onto the queue with a signal value and arguments, if any
   template<typename... FwdHandlerArgTs>
   void push_event(const SignalT& signal, FwdHandlerArgTs&&... args);
