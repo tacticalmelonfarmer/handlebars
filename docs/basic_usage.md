@@ -45,7 +45,7 @@ int main()
 
 There you go, almost too easy. Next comes the more advanced topics...
 
-## Conneting Non-static member functions
+## Connecting non-static member functions
 The part where things get a little more complicated is when you desire to use a member function which is not static. 
 Because they are allowed access to a pointer called `this`, you must provide that pointer along with the address of the member function. 
 Connection is made through the `connect_member` function:
@@ -151,4 +151,15 @@ which handles all currently pending events.
     d::respond(0); // responds to all events; default is 0, so no need to provide it if responding to all events
 }
 
+```
+
+## Disconnecting an event handler
+If you desire to have the ability to disconnect an event handler you must store a copy of its **ID**, which is returned 
+by `connect`, `connect_member`, `connect_bind` and `connect_bind_member`. You then pass this value to the `disconnect` function.
+
+```c++
+...
+auto id = d::connect(Signal, &Handler);
+d::disconnect(id);
+...
 ```

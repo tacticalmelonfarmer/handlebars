@@ -1,5 +1,5 @@
 #include <handlebars/dispatcher.hpp>
-#include <handlebars/handler.hpp>
+#include <handlebars/handles.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -17,7 +17,7 @@ enum class signals
 };
 
 // class which implements various event handlers and connects them to a dispatcher
-struct logger : public handlebars::handler<logger, signals, const std::string&>
+struct logger : public handlebars::handles<logger, signals, const std::string&>
 {
   logger(const std::filesystem::path& log_directory)
     : m_log_directory(log_directory)

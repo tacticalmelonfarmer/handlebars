@@ -1,5 +1,5 @@
 #include <cmath>
-#include <handlebars/handler.hpp>
+#include <handlebars/handles.hpp>
 #include <iostream>
 
 // signal type to handle events for
@@ -12,7 +12,7 @@ enum class op
 };
 
 // class which handles various events through a global dispatcher
-struct arithmetic : public handlebars::handler<arithmetic, op, double&, const double&>
+struct arithmetic : public handlebars::handles<arithmetic, op, double&, const double&>
 {
   void add(double& a, const double& b)
   {
