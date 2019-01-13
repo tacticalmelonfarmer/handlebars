@@ -9,17 +9,17 @@ The interface is a single class with static member functions and static data.
 An event handler can be a free/static member function, 
 a member function bound to an instance, a lambda or 
 all of the above with extra bound arguments as 
-if calling *std::bind*. Accessing is easy just 
+if calling *std::bind*, but not. Accessing is easy just 
 call a `handlebars::dispatcher<...>` method such 
 as `connect` or `push_event`
 
-### Handler
+### Handles
 There is another interface found in 
-**include/handlebars/handler.hpp** that hides the 
+**include/handlebars/handles.hpp** that hides the 
 global interface. A class can derive from it. 
 It uses the *crtp* to
 make the syntax of adding a member function 
-a bit easier to read. Your class must inherit `handlebars::handler<...>`
+a bit easier to read. Your class must inherit `handlebars::handles<...>`
 and provide its own type as the first template argument.
 This interface has similar methods to `handlebars::dispatcher<...>`.
 
