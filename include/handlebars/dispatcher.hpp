@@ -135,11 +135,12 @@ private:
   // singleton signtature
   dispatcher() {}
 
-  inline static handler_map_type m_handler_map{};
+  inline static handler_map_type m_handler_map{}, m_handler_busy_map{};
   inline static event_queue_type m_event_queue{}, m_event_busy_queue{};
-  inline static std::recursive_mutex m_event_mutex{}, m_event_busy_mutex{}, m_connect_mutex{};
+  inline static std::recursive_mutex m_event_mutex{}, m_event_busy_mutex{}, m_handler_mutex{}, m_handler_busy_mutex{};
   inline static std::unique_lock<std::recursive_mutex> m_event_lock{ m_event_mutex, std::defer_lock },
-    m_event_busy_lock{ m_event_busy_mutex, std::defer_lock }, m_connect_lock{ m_connect_mutex, std::defer_lock };
+    m_event_busy_lock{ m_event_busy_mutex, std::defer_lock }, m_handler_lock{ m_handler_mutex, std::defer_lock },
+    m_handler_busy_lock{ m_handler_busy_mutex, std::defer_lock };
 };
 }
 
@@ -154,11 +155,19 @@ template<typename HandlerT>
 typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
 dispatcher<SignalT, HandlerArgTs...>::connect(const SignalT& signal, HandlerT&& handler)
 {
-  m_connect_lock.lock();
-  m_handler_map[signal].emplace_back(std::forward<HandlerT>(handler));
-  auto handler_id = std::make_tuple(signal, --m_handler_map[signal].end());
-  m_connect_lock.unlock();
-  return handler_id;
+  if (m_handler_lock.owns_lock() == true) {
+    m_handler_busy_lock.lock();
+    m_handler_busy_map[signal].emplace_back(std::forward<HandlerT>(handler));
+    auto handler_id = std::make_tuple(signal, --m_handler_busy_map[signal].end());
+    m_handler_busy_lock.unlock();
+    return handler_id;
+  } else {
+    m_handler_lock.lock();
+    m_handler_map[signal].emplace_back(std::forward<HandlerT>(handler));
+    auto handler_id = std::make_tuple(signal, --m_handler_map[signal].end());
+    m_handler_lock.unlock();
+    return handler_id;
+  }
 }
 
 template<typename SignalT, typename... HandlerArgTs>
@@ -168,14 +177,25 @@ dispatcher<SignalT, HandlerArgTs...>::connect_bind(const SignalT& signal,
                                                    HandlerT&& handler,
                                                    BoundArgTs&&... bound_args)
 {
-  m_connect_lock.lock();
-  m_handler_map[signal].emplace_back(std::move(
-    [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
-      std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
-    }));
-  auto handler_id = std::make_tuple(signal, --m_handler_map[signal].end());
-  m_connect_lock.unlock();
-  return handler_id;
+  if (m_handler_lock.owns_lock() == true) {
+    m_handler_busy_lock.lock();
+    m_handler_busy_map[signal].emplace_back(std::move(
+      [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
+        std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
+      }));
+    auto handler_id = std::make_tuple(signal, --m_handler_busy_map[signal].end());
+    m_handler_busy_lock.unlock();
+    return handler_id;
+  } else {
+    m_handler_lock.lock();
+    m_handler_map[signal].emplace_back(std::move(
+      [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
+        std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
+      }));
+    auto handler_id = std::make_tuple(signal, --m_handler_map[signal].end());
+    m_handler_lock.unlock();
+    return handler_id;
+  }
 }
 
 template<typename SignalT, typename... HandlerArgTs>
@@ -183,10 +203,10 @@ template<typename ClassT, typename MemPtrT>
 typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
 dispatcher<SignalT, HandlerArgTs...>::connect_member(const SignalT& signal, ClassT&& object, MemPtrT member)
 {
-  m_connect_lock.lock();
+  m_handler_lock.lock();
   m_handler_map[signal].emplace_back(std::forward<ClassT>(object), member);
   auto handler_id = std::make_tuple(signal, --m_handler_map[signal].end());
-  m_connect_lock.unlock();
+  m_handler_lock.unlock();
   return handler_id;
 }
 
@@ -198,14 +218,14 @@ dispatcher<SignalT, HandlerArgTs...>::connect_bind_member(const SignalT& signal,
                                                           MemPtrT member,
                                                           BoundArgTs&&... bound_args)
 {
-  m_connect_lock.lock();
+  m_handler_lock.lock();
   m_handler_map[signal].emplace_back(
     [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
       std::apply(function(std::forward<ClassT>(object), member),
                  std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<HandlerArgTs>(args)...)));
     });
   auto handler_id = std::make_tuple(signal, --m_handler_map[signal].end());
-  m_connect_lock.unlock();
+  m_handler_lock.unlock();
   return handler_id;
 }
 
@@ -241,7 +261,9 @@ template<typename SignalT, typename... HandlerArgTs>
 size_t
 dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
 {
-  m_connect_lock.lock();
+  if (m_event_lock.owns_lock() == true)
+    return 0;
+  m_handler_lock.lock();
   m_event_lock.lock();
   size_t progress = 0;
 
@@ -272,7 +294,16 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
         break;
     }
   }
-  // here we load any events that were pushed by another thread while responding
+  // here we load any handlers that were connected while responding
+  m_handler_busy_lock.lock();
+  for (auto&& [k, v] : m_handler_busy_map) {
+    for (auto&& h : v) {
+      m_handler_map[k].push_back(h);
+    }
+  }
+  m_handler_busy_map.clear();
+  m_handler_busy_lock.unlock();
+  // here we load any events that were pushed  while responding
   m_event_busy_lock.lock();
   for (auto i = m_event_busy_queue.rbegin(); i != m_event_busy_queue.rend(); ++i) {
     auto&& e = *i;
@@ -281,17 +312,17 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
   m_event_busy_queue.clear();
   m_event_busy_lock.unlock();
   m_event_lock.unlock();
-  m_connect_lock.unlock();
-  return progress;
+  m_handler_lock.unlock();
+  return progress + 1;
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 void
 dispatcher<SignalT, HandlerArgTs...>::disconnect(const handler_id_type& handler_id)
 {
-  m_connect_lock.lock();
+  m_handler_lock.lock();
   m_handler_map[std::get<0>(handler_id)].erase(std::get<1>(handler_id));
-  m_connect_lock.unlock();
+  m_handler_lock.unlock();
 }
 
 template<typename SignalT, typename... HandlerArgTs>
