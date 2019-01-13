@@ -241,7 +241,6 @@ template<typename SignalT, typename... HandlerArgTs>
 size_t
 dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
 {
-  using namespace std::chrono_literals;
   m_connect_lock.lock();
   m_event_lock.lock();
   size_t progress = 0;
@@ -251,8 +250,8 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
   if (limit == 0) { // respond to an unlimited amount of events
     for (size_t i = m_event_queue.size() - 1;; --i, ++progress) {
       {
-        auto& current_event = m_event_queue[i];
-        for (auto& handler : m_handler_map[std::get<0>(current_event)]) {
+        auto&& current_event = m_event_queue[i];
+        for (auto&& handler : m_handler_map[std::get<0>(current_event)]) {
           std::apply(handler, std::get<1>(current_event));
         }
       }
@@ -263,8 +262,8 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
   } else { // respond to a limited amount of events
     for (size_t i = m_event_queue.size() - 1; progress != limit; --i, ++progress) {
       {
-        auto& current_event = m_event_queue[i];
-        for (auto& handler : m_handler_map[std::get<0>(current_event)]) {
+        auto&& current_event = m_event_queue[i];
+        for (auto&& handler : m_handler_map[std::get<0>(current_event)]) {
           std::apply(handler, std::get<1>(current_event));
         }
       }
@@ -276,7 +275,7 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
   // here we load any events that were pushed by another thread while responding
   m_event_busy_lock.lock();
   for (auto i = m_event_busy_queue.rbegin(); i != m_event_busy_queue.rend(); ++i) {
-    auto&& e = *i; // forwarding here allows us to transfer references without them decaying into values
+    auto&& e = *i;
     m_event_queue.push_front(std::forward<decltype(e)>(e));
   }
   m_event_busy_queue.clear();
