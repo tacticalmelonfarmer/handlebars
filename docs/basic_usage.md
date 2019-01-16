@@ -1,6 +1,8 @@
-# How to handle events in Handlebars
-An event handler in Handlebars is a *callable* taking arguments of whatever types are specified by the user, with `void` return type. 
-They can be *connected*, *have arguments bound to them* or *be responded to*. The signal type and arguments types together are 
+# Basic Definitions
+A *signal* is a value which indicates what type of event has happened.
+An *event* is represented by a signal and arbitrary data, wrapped into a tuple like object. 
+An *event handler* is a callable taking arguments of whatever types are specified by the user, with `void` return type. 
+They can be *connected to a signal* and optionally have arguments *bound* to them. The signal type and arguments types together are 
 called the *event signature*.
 
 **NOTE**: cv-qualified *pointers to member functions* are allowed, because the cv-qualifiers are type-erased away.
