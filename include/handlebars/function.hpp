@@ -42,26 +42,9 @@ struct function_info
 inline namespace detail {
 
 template<typename T>
-struct forward_ref
-{
-  constexpr forward_ref(T&& ref)
-    : m_ref(&ref)
-  {}
-  constexpr forward_ref(const T& ref)
-    : m_ref(&ref)
-  {}
-
-  constexpr operator const T&() const { return *m_ref; }
-
-private:
-  const T* m_ref;
-  ;
-};
-
-template<typename T>
 struct in_place_forward
 {
-  using type = forward_ref<T>;
+  using type = const T&;
 };
 
 template<typename T>
