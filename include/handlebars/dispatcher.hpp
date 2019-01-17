@@ -39,7 +39,17 @@ private:
 };
 
 template<typename T>
-special_ref(T &&)->special_ref<T>;
+struct fake_rval
+{
+  constexpr fake_rval(T&& ref)
+    : m_val(std::move(ref))
+  {}
+
+  constexpr operator T() const { return T{ m_val }; }
+
+private:
+  T m_val;
+};
 
 template<typename T>
 struct arg_storage
@@ -49,7 +59,7 @@ struct arg_storage
 template<typename T>
 struct arg_storage<T&&>
 {
-  using type = T&&;
+  using type = fake_rval<T>;
 };
 template<typename T>
 struct arg_storage<const T&>
@@ -263,8 +273,9 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
 {
   if (m_event_lock.owns_lock() == true)
     return 0;
-  m_handler_lock.lock();
-  m_event_lock.lock();
+
+  std::scoped_lock lock(m_handler_mutex, m_event_mutex);
+
   size_t progress = 0;
 
   if (m_event_queue.size() == 0)
@@ -295,24 +306,22 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
     }
   }
   // here we load any handlers that were connected while responding
-  m_handler_busy_lock.lock();
-  for (auto&& [k, v] : m_handler_busy_map) {
-    for (auto&& h : v) {
-      m_handler_map[k].push_back(h);
+  {
+    std::scoped_lock tmp_lock(m_handler_busy_mutex, m_event_busy_mutex);
+    for (auto&& [k, v] : m_handler_busy_map) {
+      for (auto&& h : v) {
+        m_handler_map[k].push_back(h);
+      }
     }
+    m_handler_busy_map.clear();
+    // here we load any events that were pushed  while responding
+    for (auto i = m_event_busy_queue.rbegin(); i != m_event_busy_queue.rend(); ++i) {
+      auto&& e = *i;
+      m_event_queue.push_front(std::forward<decltype(e)>(e));
+    }
+    m_event_busy_queue.clear();
   }
-  m_handler_busy_map.clear();
-  m_handler_busy_lock.unlock();
-  // here we load any events that were pushed  while responding
-  m_event_busy_lock.lock();
-  for (auto i = m_event_busy_queue.rbegin(); i != m_event_busy_queue.rend(); ++i) {
-    auto&& e = *i;
-    m_event_queue.push_front(std::forward<decltype(e)>(e));
-  }
-  m_event_busy_queue.clear();
-  m_event_busy_lock.unlock();
-  m_event_lock.unlock();
-  m_handler_lock.unlock();
+
   return progress + 1;
 }
 

@@ -39,6 +39,7 @@ struct repl
   using events = handlebars::dispatcher<std::string, std::vector<std::string>>;
   repl()
     : m_step(0)
+    , m_active(true)
   {
     events::connect("help", [](auto argv) { std::cout << "valid commands: help quit echo\n"; });
     events::connect("quit", [this](auto argv) { this->m_active = false; });

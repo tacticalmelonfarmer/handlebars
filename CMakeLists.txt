@@ -25,3 +25,9 @@ target_link_libraries(ordered handlebars)
 
 add_executable(repl example/repl/main.cpp)
 target_link_libraries(repl handlebars)
+
+add_executable(rvalues example/rvalues/main.cpp)
+target_link_libraries(rvalues handlebars)
+
+add_executable(lvalues example/lvalues/main.cpp)
+target_link_libraries(lvalues handlebars)

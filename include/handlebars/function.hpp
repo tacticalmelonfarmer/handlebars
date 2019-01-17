@@ -71,6 +71,12 @@ struct in_place_forward<T&>
 };
 
 template<typename T>
+struct in_place_forward<T&&>
+{
+  using type = T&&;
+};
+
+template<typename T>
 using in_place_forward_t = typename in_place_forward<T>::type;
 
 template<typename ReturnT, typename... ArgTs>
@@ -93,8 +99,14 @@ struct member_function : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (m_object.*m_member)(args...); }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override { return (m_object.*m_member)(args...); }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (m_object.*m_member)(static_cast<ArgTs>(args)...);
+  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
+  {
+    return (m_object.*m_member)(static_cast<ArgTs>(args)...);
+  }
 
   function_info get_info() override
   {
@@ -118,8 +130,14 @@ struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (m_object.get()->*m_member)(args...); }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override { return (m_object.get()->*m_member)(args...); }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (m_object.get()->*m_member)(static_cast<ArgTs>(args)...);
+  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
+  {
+    return (m_object.get()->*m_member)(static_cast<ArgTs>(args)...);
+  }
   function_info get_info() override
   {
     return {
@@ -142,8 +160,14 @@ struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (m_object->*m_member)(args...); }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override { return (m_object->*m_member)(args...); }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (m_object->*m_member)(static_cast<ArgTs>(args)...);
+  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
+  {
+    return (m_object->*m_member)(static_cast<ArgTs>(args)...);
+  }
   function_info get_info() override
   {
     return {
@@ -163,8 +187,14 @@ struct free_function : function_base<ReturnT, ArgTs...>
   free_function(function_ptr_t pointer)
     : m_function_ptr(pointer)
   {}
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override { return (*m_function_ptr)(args...); }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override { return (*m_function_ptr)(args...); }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
+  {
+    return (*m_function_ptr)(static_cast<ArgTs>(args)...);
+  }
+  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
+  {
+    return (*m_function_ptr)(static_cast<ArgTs>(args)...);
+  }
   function_info get_info() override
   {
     return { reinterpret_cast<std::uintptr_t>(nullptr),
