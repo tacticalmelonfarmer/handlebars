@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <exception>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -16,28 +14,6 @@
   "before including this file"
 
 namespace handlebars {
-
-enum class function_source
-{
-  free,
-  member_external, // a member of a pointed to object
-  member_internal  // a member of a held and owned object
-};
-
-enum class function_ownership
-{
-  owned,
-  shared,
-  undefined
-};
-
-struct function_info
-{
-  const std::uintptr_t object;
-  const std::uintptr_t target;
-  const function_source source;
-  const function_ownership ownership;
-};
 
 inline namespace detail {
 
@@ -65,40 +41,42 @@ using in_place_forward_t = typename in_place_forward<T>::type;
 template<typename ReturnT, typename... ArgTs>
 struct function_base
 {
-  virtual ~function_base() {}
-  virtual ReturnT operator()(in_place_forward_t<ArgTs>...) = 0;
-  virtual ReturnT operator()(in_place_forward_t<ArgTs>...) const = 0;
-  virtual function_info get_info() = 0;
+  using deleter_fp = void (*)(const function_base<ReturnT, ArgTs...>*);
+  using caller_fp = ReturnT (*)(const function_base<ReturnT, ArgTs...>*, in_place_forward_t<ArgTs>...);
 };
 
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
 struct member_function : function_base<ReturnT, ArgTs...>
 {
+  using this_type = member_function<ClassT, MemPtrT, ReturnT, ArgTs...>;
+
+  using deleter_fp = typename function_base<ReturnT, ArgTs...>::deleter_fp;
+  using caller_fp = typename function_base<ReturnT, ArgTs...>::caller_fp;
+
+  static deleter_fp get_deleter()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      ptr->~this_type();
+    };
+  }
+  static caller_fp get_caller()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore, in_place_forward_t<ArgTs>... arguments) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      return (ptr->m_object.*(ptr->m_member))(static_cast<ArgTs>(arguments)...);
+    };
+  }
+
   template<typename FwdClassT>
   member_function(FwdClassT&& object, MemPtrT member)
-    : m_object(std::forward<FwdClassT>(object))
+    : m_object(std::move(object))
     , m_member(member)
   {
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (m_object.*m_member)(static_cast<ArgTs>(args)...);
-  }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
-  {
-    return (m_object.*m_member)(static_cast<ArgTs>(args)...);
-  }
 
-  function_info get_info() override
-  {
-    return {
-      reinterpret_cast<std::uintptr_t>(&m_object), 0, function_source::member_internal, function_ownership::owned
-    };
-  }
-
-private:
   ClassT m_object;
   MemPtrT m_member;
 };
@@ -106,6 +84,26 @@ private:
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
 struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
 {
+  using this_type = member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>;
+
+  using deleter_fp = typename function_base<ReturnT, ArgTs...>::deleter_fp;
+  using caller_fp = typename function_base<ReturnT, ArgTs...>::caller_fp;
+
+  static deleter_fp get_deleter()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      ptr->~this_type();
+    };
+  }
+  static caller_fp get_caller()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore, in_place_forward_t<ArgTs>... arguments) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      return (ptr->m_object.get()->*(ptr->m_member))(static_cast<ArgTs>(arguments)...);
+    };
+  }
+
   member_function_smart_pointer(const std::shared_ptr<ClassT>& object, MemPtrT member)
     : m_object(object)
     , m_member(member)
@@ -113,22 +111,7 @@ struct member_function_smart_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (m_object.get()->*m_member)(static_cast<ArgTs>(args)...);
-  }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
-  {
-    return (m_object.get()->*m_member)(static_cast<ArgTs>(args)...);
-  }
-  function_info get_info() override
-  {
-    return {
-      reinterpret_cast<std::uintptr_t>(m_object.get()), 0, function_source::member_external, function_ownership::shared
-    };
-  }
 
-private:
   std::shared_ptr<ClassT> m_object;
   MemPtrT m_member;
 };
@@ -136,6 +119,26 @@ private:
 template<typename ClassT, typename MemPtrT, typename ReturnT, typename... ArgTs>
 struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
 {
+  using this_type = member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>;
+
+  using deleter_fp = typename function_base<ReturnT, ArgTs...>::deleter_fp;
+  using caller_fp = typename function_base<ReturnT, ArgTs...>::caller_fp;
+
+  static deleter_fp get_deleter()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      ptr->~this_type();
+    };
+  }
+  static caller_fp get_caller()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore, in_place_forward_t<ArgTs>... arguments) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      return (ptr->m_object->*(ptr->m_member))(static_cast<ArgTs>(arguments)...);
+    };
+  }
+
   member_function_raw_pointer(ClassT* object, MemPtrT member)
     : m_object(object)
     , m_member(member)
@@ -143,22 +146,7 @@ struct member_function_raw_pointer : function_base<ReturnT, ArgTs...>
     static_assert(std::is_member_function_pointer_v<MemPtrT>,
                   "`MemPtrT member` must be a pointer to member function of `ClassT`");
   }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (m_object->*m_member)(static_cast<ArgTs>(args)...);
-  }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
-  {
-    return (m_object->*m_member)(static_cast<ArgTs>(args)...);
-  }
-  function_info get_info() override
-  {
-    return {
-      reinterpret_cast<std::uintptr_t>(m_object), 0, function_source::member_external, function_ownership::undefined
-    };
-  }
 
-private:
   ClassT* m_object;
   MemPtrT m_member;
 };
@@ -166,27 +154,23 @@ private:
 template<typename ReturnT, typename... ArgTs>
 struct free_function : function_base<ReturnT, ArgTs...>
 {
+  using this_type = free_function<ReturnT, ArgTs...>;
+
+  using caller_fp = typename function_base<ReturnT, ArgTs...>::caller_fp;
+
+  static caller_fp get_caller()
+  {
+    return [](const function_base<ReturnT, ArgTs...>* polystore, in_place_forward_t<ArgTs>... arguments) {
+      auto ptr = const_cast<this_type*>(static_cast<const this_type*>(polystore));
+      return (*(ptr->m_function_ptr))(static_cast<ArgTs>(arguments)...);
+    };
+  }
+
   using function_ptr_t = ReturnT (*)(ArgTs...);
   free_function(function_ptr_t pointer)
     : m_function_ptr(pointer)
   {}
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) override
-  {
-    return (*m_function_ptr)(static_cast<ArgTs>(args)...);
-  }
-  ReturnT operator()(in_place_forward_t<ArgTs>... args) const override
-  {
-    return (*m_function_ptr)(static_cast<ArgTs>(args)...);
-  }
-  function_info get_info() override
-  {
-    return { reinterpret_cast<std::uintptr_t>(nullptr),
-             reinterpret_cast<std::uintptr_t>(m_function_ptr),
-             function_source::free,
-             function_ownership::shared };
-  }
 
-private:
   function_ptr_t m_function_ptr;
 };
 
@@ -306,9 +290,6 @@ struct function<ReturnT(ArgTs...)>
   // points to a callable using a pointer to function
   function(function_type* function_pointer);
 
-  // points to a callable using a reference to function
-  function(function_type& function_reference);
-
   // default initialize to be an empty function<...>
   function()
     : m_empty(true)
@@ -328,28 +309,26 @@ struct function<ReturnT(ArgTs...)>
 
   // call the stored function
   template<typename... FwdArgTs>
-  ReturnT operator()(FwdArgTs&&... arguments);
-
-  template<typename... FwdArgTs>
   ReturnT operator()(FwdArgTs&&... arguments) const;
-
-  function_info get_info() const { return access()->get_info(); }
 
   // self-destruct sequence
   ~function() { destroy(); }
 
 private:
-  function_base<ReturnT, ArgTs...>* access() { return reinterpret_cast<function_base<ReturnT, ArgTs...>*>(&m_storage); }
-  const function_base<ReturnT, ArgTs...>* access() const
+  constexpr auto access() { return reinterpret_cast<function_base<ReturnT, ArgTs...>*>(&m_storage); }
+  constexpr auto access() const { return reinterpret_cast<const function_base<ReturnT, ArgTs...>*>(&m_storage); }
+
+  void destroy() const
   {
-    return reinterpret_cast<const function_base<ReturnT, ArgTs...>*>(&m_storage);
+    if (m_empty == false && m_deleter != nullptr)
+      (*m_deleter)(access());
   }
-  void destroy()
-  {
-    if (!m_empty)
-      access()->~function_base<ReturnT, ArgTs...>();
-  }
+
+  typename function_base<ReturnT, ArgTs...>::deleter_fp m_deleter;
+  typename function_base<ReturnT, ArgTs...>::caller_fp m_caller;
+
   bool m_empty;
+
   std::aligned_storage_t<HANDLEBARS_FUNCTION_COMMON_MAX_SIZE> m_storage;
 };
 
@@ -371,7 +350,9 @@ function<ReturnT(ArgTs...)>::function(ClassT&& object, MemPtrT member)
 {
   static_assert(sizeof(member_function<ClassT, MemPtrT, ReturnT, ArgTs...>) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access()) member_function<ClassT, MemPtrT, ReturnT, ArgTs...>(std::forward<ClassT>(object), member);
+  new (access()) member_function<ClassT, MemPtrT, ReturnT, ArgTs...>(std::move(object), member);
+  m_deleter = member_function<ClassT, MemPtrT, ReturnT, ArgTs...>::get_deleter();
+  m_caller = member_function<ClassT, MemPtrT, ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -380,11 +361,14 @@ function<ReturnT(ArgTs...)>::function(ClassT&& object)
   : m_empty(false)
 {
   using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
+
   static_assert(sizeof(member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
   new (access())
-    member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(std::forward<ClassT>(object), &ClassT::operator());
+    member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(std::move(object), &ClassT::operator());
+  m_deleter = member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::get_deleter();
+  m_caller = member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -396,6 +380,8 @@ function<ReturnT(ArgTs...)>::function(ClassT* object, MemPtrT member)
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
   new (access()) member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
+  m_deleter = member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::get_deleter();
+  m_caller = member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -404,11 +390,14 @@ function<ReturnT(ArgTs...)>::function(ClassT* object)
   : m_empty(false)
 {
   using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
+
   static_assert(sizeof(member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
   new (access())
     member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
+  m_deleter = member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::get_deleter();
+  m_caller = member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -420,6 +409,8 @@ function<ReturnT(ArgTs...)>::function(std::shared_ptr<ClassT> object, MemPtrT me
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
   new (access()) member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
+  m_deleter = member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::get_deleter();
+  m_caller = member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -434,6 +425,8 @@ function<ReturnT(ArgTs...)>::function(std::shared_ptr<ClassT> object)
                 HANDLEBARS_FUNCTION_ERROR);
   new (access())
     member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
+  m_deleter = member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::get_deleter();
+  m_caller = member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -442,14 +435,8 @@ function<ReturnT(ArgTs...)>::function(function_type* function_pointer)
 {
   static_assert(sizeof(function_type*) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE, HANDLEBARS_FUNCTION_ERROR);
   new (access()) free_function<ReturnT, ArgTs...>(function_pointer);
-}
-
-template<typename ReturnT, typename... ArgTs>
-function<ReturnT(ArgTs...)>::function(function_type& function_reference)
-  : m_empty(false)
-{
-  static_assert(sizeof(function_type*) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE, HANDLEBARS_FUNCTION_ERROR);
-  new (access()) free_function<ReturnT, ArgTs...>(&function_reference);
+  m_deleter = nullptr;
+  m_caller = free_function<ReturnT, ArgTs...>::get_caller();
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -457,6 +444,8 @@ function<ReturnT(ArgTs...)>::function(const function<ReturnT(ArgTs...)>& other)
 {
   if (!other.m_empty) {
     m_storage = other.m_storage;
+    m_deleter = other.m_deleter;
+    m_caller = other.m_caller;
     m_empty = false;
   }
 }
@@ -466,6 +455,8 @@ function<ReturnT(ArgTs...)>::function(function<ReturnT(ArgTs...)>&& other) noexc
 {
   if (other.m_empty) {
     m_storage = std::move(other.m_storage);
+    m_deleter = std::move(other.m_deleter);
+    m_caller = std::move(other.m_caller);
     other.m_empty = true;
     m_empty = false;
   }
@@ -481,6 +472,8 @@ function<ReturnT(ArgTs...)>::operator=(const function<ReturnT(ArgTs...)>& rhs)
     return *this;
   } else {
     m_storage = rhs.m_storage;
+    m_deleter = rhs.m_deleter;
+    m_caller = rhs.m_caller;
     m_empty = false;
     return *this;
   }
@@ -496,21 +489,12 @@ function<ReturnT(ArgTs...)>::operator=(function<ReturnT(ArgTs...)>&& rhs) noexce
     return *this;
   } else {
     m_storage = std::move(rhs.m_storage);
+    m_deleter = std::move(rhs.m_deleter);
+    m_caller = std::move(rhs.m_caller);
     rhs.m_empty = true;
     m_empty = false;
     return *this;
   }
-}
-
-template<typename ReturnT, typename... ArgTs>
-template<typename... FwdArgTs>
-ReturnT
-function<ReturnT(ArgTs...)>::operator()(FwdArgTs&&... arguments)
-{
-  if (m_empty)
-    throw empty_function{};
-  else
-    return access()->operator()(std::forward<FwdArgTs>(arguments)...);
 }
 
 template<typename ReturnT, typename... ArgTs>
@@ -521,6 +505,6 @@ function<ReturnT(ArgTs...)>::operator()(FwdArgTs&&... arguments) const
   if (m_empty)
     throw empty_function{};
   else
-    return access()->operator()(std::forward<FwdArgTs>(arguments)...);
+    return (*m_caller)(access(), std::forward<FwdArgTs>(arguments)...);
 }
 }
