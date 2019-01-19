@@ -290,8 +290,11 @@ struct function<ReturnT(ArgTs...)>
   ~function() { destroy(); }
 
 private:
-  constexpr auto access() { return reinterpret_cast<function_base<ReturnT, ArgTs...>*>(&m_storage); }
-  constexpr auto access() const { return reinterpret_cast<const function_base<ReturnT, ArgTs...>*>(&m_storage); }
+  constexpr auto access() { return std::launder(reinterpret_cast<function_base<ReturnT, ArgTs...>*>(&m_storage)); }
+  constexpr auto access() const
+  {
+    return std::launder(reinterpret_cast<const function_base<ReturnT, ArgTs...>*>(&m_storage));
+  }
 
   void destroy() const
   {
@@ -325,7 +328,7 @@ function<ReturnT(ArgTs...)>::function(ClassT&& object, MemPtrT member)
 {
   static_assert(sizeof(member_function<ClassT, MemPtrT, ReturnT, ArgTs...>) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access()) member_function<ClassT, MemPtrT, ReturnT, ArgTs...>(std::move(object), member);
+  ::new (access()) member_function<ClassT, MemPtrT, ReturnT, ArgTs...>(std::move(object), member);
   m_deleter = &member_function<ClassT, MemPtrT, ReturnT, ArgTs...>::deleter;
   m_caller = &member_function<ClassT, MemPtrT, ReturnT, ArgTs...>::caller;
 }
@@ -340,7 +343,7 @@ function<ReturnT(ArgTs...)>::function(ClassT&& object)
   static_assert(sizeof(member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access())
+  ::new (access())
     member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(std::move(object), &ClassT::operator());
   m_deleter = &member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::deleter;
   m_caller = &member_function<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::caller;
@@ -354,7 +357,7 @@ function<ReturnT(ArgTs...)>::function(ClassT* object, MemPtrT member)
   static_assert(sizeof(member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access()) member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
+  ::new (access()) member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
   m_deleter = &member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::deleter;
   m_caller = &member_function_raw_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::caller;
 }
@@ -369,7 +372,7 @@ function<ReturnT(ArgTs...)>::function(ClassT* object)
   static_assert(sizeof(member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access())
+  ::new (access())
     member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
   m_deleter = &member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::deleter;
   m_caller = &member_function_raw_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::caller;
@@ -383,7 +386,7 @@ function<ReturnT(ArgTs...)>::function(std::shared_ptr<ClassT> object, MemPtrT me
   static_assert(sizeof(member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access()) member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
+  ::new (access()) member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>(object, member);
   m_deleter = &member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::deleter;
   m_caller = &member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>::caller;
 }
@@ -398,7 +401,7 @@ function<ReturnT(ArgTs...)>::function(std::shared_ptr<ClassT> object)
   static_assert(sizeof(member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>) <=
                   HANDLEBARS_FUNCTION_COMMON_MAX_SIZE,
                 HANDLEBARS_FUNCTION_ERROR);
-  new (access())
+  ::new (access())
     member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>(object, &ClassT::operator());
   m_deleter = &member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::deleter;
   m_caller = &member_function_smart_pointer<ClassT, call_operator_ptr_t, ReturnT, ArgTs...>::caller;
@@ -409,7 +412,7 @@ function<ReturnT(ArgTs...)>::function(function_type* function_pointer)
   : m_empty(false)
 {
   static_assert(sizeof(function_type*) <= HANDLEBARS_FUNCTION_COMMON_MAX_SIZE, HANDLEBARS_FUNCTION_ERROR);
-  new (access()) free_function<ReturnT, ArgTs...>(function_pointer);
+  ::new (access()) free_function<ReturnT, ArgTs...>(function_pointer);
   m_deleter = nullptr;
   m_caller = &free_function<ReturnT, ArgTs...>::caller;
 }
