@@ -261,11 +261,11 @@ struct function<ReturnT(ArgTs...)>
   // points to an object and holds a pointer to non-static member function of
   // the held object
   template<typename ClassT, typename MemPtrT>
-  function(::std::shared_ptr<ClassT>& object, MemPtrT member);
+  function(const ::std::shared_ptr<ClassT>& object, MemPtrT member);
 
   // points to an object and points to it's call operator `ClassT::operator()`
   template<typename ClassT>
-  function(::std::shared_ptr<ClassT>& object);
+  function(const ::std::shared_ptr<ClassT>& object);
 
   // points to a callable using a pointer to function
   function(function_type* function_pointer);
@@ -384,7 +384,7 @@ function<ReturnT(ArgTs...)>::function(ClassT* object)
 
 template<typename ReturnT, typename... ArgTs>
 template<typename ClassT, typename MemPtrT>
-function<ReturnT(ArgTs...)>::function(::std::shared_ptr<ClassT>& object, MemPtrT member)
+function<ReturnT(ArgTs...)>::function(const ::std::shared_ptr<ClassT>& object, MemPtrT member)
   : m_empty(false)
 {
   static_assert(sizeof(member_function_smart_pointer<ClassT, MemPtrT, ReturnT, ArgTs...>) <=
@@ -397,7 +397,7 @@ function<ReturnT(ArgTs...)>::function(::std::shared_ptr<ClassT>& object, MemPtrT
 
 template<typename ReturnT, typename... ArgTs>
 template<typename ClassT>
-function<ReturnT(ArgTs...)>::function(::std::shared_ptr<ClassT>& object)
+function<ReturnT(ArgTs...)>::function(const ::std::shared_ptr<ClassT>& object)
   : m_empty(false)
 {
   using call_operator_ptr_t = typename sfinae::generic_call_operator<ClassT, ReturnT, ArgTs...>::type;
