@@ -308,8 +308,6 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
 
   size_t progress = 0;
 
-  if (m_event_queue.size() == 0)
-    return 0;
   if (limit == 0) { // respond to an unlimited amount of events
     for (auto&& e : m_event_queue) {
       for (auto&& h : m_handler_map[std::get<0>(e)]) {
