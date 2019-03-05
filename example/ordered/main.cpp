@@ -25,7 +25,7 @@ main()
   D::connect(4, [] { std::cout << "4\n"; });
   D::connect(5, [] { std::cout << "5\n"; });
   D::update_events(
-    [](auto q) { std::sort(q.begin(), q.end(), [](auto l, auto r) { return std::get<0>(l) > std::get<0>(r); }); });
+    [](auto q) { std::sort(q.begin(), q.end(), [](auto l, auto r) { return l.signal > r.signal; }); });
   std::cout << "sorted:\n";
   D::respond();
   return 0;

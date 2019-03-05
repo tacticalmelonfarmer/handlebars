@@ -95,7 +95,12 @@ struct dispatcher
   // handler map, simply maps signals to their corresponding handler chains
   using handler_map_type = std::unordered_map<SignalT, handler_chain_type>;
   // events hold all relevant data to call a handler list
-  using event_type = std::tuple<signal_type, args_storage_type>;
+  struct event_type
+  {
+    signal_type signal;
+    args_storage_type args;
+  };
+
   // event queue is a modify-able fifo queue that stores events
   using event_queue_type = std::deque<event_type>;
 
@@ -141,7 +146,6 @@ struct dispatcher
   static void update_events(const function<void(event_queue_type&)>& updater);
 
 private:
-  // singleton signtature
   dispatcher() {}
 
   inline static handler_map_type m_handler_map{};
@@ -284,8 +288,8 @@ dispatcher<SignalT, HandlerArgTs...>::push_event(const SignalT& signal, FwdHandl
   while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
-  m_event_queue.push_back(std::make_tuple(
-    signal, std::forward_as_tuple(static_cast<arg_storage_t<HandlerArgTs>>(std::forward<FwdHandlerArgTs>(args))...)));
+  m_event_queue.emplace_back(event_type{
+    signal, std::forward_as_tuple(static_cast<arg_storage_t<HandlerArgTs>>(std::forward<FwdHandlerArgTs>(args))...) });
   m_threads_pushing_events -= 1;
 }
 
@@ -310,17 +314,19 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
 
   if (limit == 0) { // respond to an unlimited amount of events
     for (auto&& e : m_event_queue) {
-      for (auto&& h : m_handler_map[std::get<0>(e)]) {
+      for (auto&& h : m_handler_map[e.signal]) {
         if (h.has_value()) {
-          std::apply(h.value(), std::get<1>(e));
+          std::apply(h.value(), e.args);
         }
       }
     }
+    m_event_queue.clear();
   } else { // respond to a limited amount of events
     for (auto&& e : m_event_queue) {
-      for (auto&& h : m_handler_map[std::get<0>(e)]) {
+      for (auto&& h : m_handler_map[e.signal]) {
         if (h.has_value()) {
-          std::apply(h.value(), std::get<1>(e));
+          std::apply(h.value(), e.args);
+          m_event_queue.pop_front();
         }
         ++progress;
         if (progress == limit) {
@@ -328,6 +334,8 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
         }
       }
     }
+    /// auto eqbegin = m_event_queue.begin();
+    /// m_event_queue.erase(eqbegin, eqbegin + progress);
   }
 
   m_threads_responding_to_events -= 1;
