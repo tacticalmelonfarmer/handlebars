@@ -2,11 +2,13 @@ cmake_minimum_required(VERSION 3.12)
 
 project(handlebars LANGUAGES CXX)
 
+add_subdirectory(callable)
+
 find_package(Threads)
 add_library(handlebars INTERFACE)
 target_compile_features(handlebars INTERFACE cxx_std_17)
 target_include_directories(handlebars INTERFACE include)
-target_link_libraries(handlebars INTERFACE Threads::Threads)
+target_link_libraries(handlebars INTERFACE callable Threads::Threads)
 
 add_executable(logger example/logger/main.cpp)
 target_link_libraries(logger handlebars)

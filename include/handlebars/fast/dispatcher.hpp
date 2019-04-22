@@ -1,160 +1,89 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <optional>
-#include <queue>
 #include <tuple>
-#include <unordered_map>
 #include <utility>
 #include <variant>
-#include <vector>
+#include <type_traits>
 
-#include <callable.hpp>
+#include "../function.hpp"
+#include "../dispatcher.hpp"
+#include "static_queue.hpp"
 
-namespace handlebars {
+namespace handlebars::fast {
 
-inline namespace detail {
-
-template<typename T>
-struct special_ref
+template<typename E>
+struct valid_signal_enum
 {
-  constexpr special_ref(T&& ref)
-    : m_ref(std::move(ref))
-  {}
-  constexpr special_ref(const T& ref)
-    : m_ref(&ref)
-  {}
-
-  constexpr operator const T&() const
-  {
-    if (std::holds_alternative<const T*>(m_ref)) {
-      return *std::get<const T*>(m_ref);
-    } else {
-      return std::get<T>(m_ref);
-    }
-  }
-
-private:
-  const std::variant<T, const T*> m_ref;
+  static constexpr auto signal_limit = static_cast<size_t>(E::signal_limit);
+  static constexpr auto handler_chain_size = static_cast<size_t>(E::handler_chain_size);
+  static constexpr auto event_queue_size = static_cast<size_t>(E::event_queue_size);
+  using type = E;
 };
-
-template<typename T>
-struct fake_rval
-{
-  constexpr fake_rval(T&& ref)
-    : m_val(std::move(ref))
-  {}
-
-  constexpr operator T() const { return T{ m_val }; }
-
-private:
-  T m_val;
-};
-
-template<typename T>
-struct arg_storage
-{
-  using type = T;
-};
-template<typename T>
-struct arg_storage<T&&>
-{
-  using type = fake_rval<T>;
-};
-template<typename T>
-struct arg_storage<const T&>
-{
-  using type = special_ref<T>;
-};
-template<typename T>
-struct arg_storage<T&>
-{
-  using type = T&;
-};
-template<typename T>
-using arg_storage_t = typename arg_storage<T>::type;
-}
 
 template<typename SignalT, typename... HandlerArgTs>
 struct dispatcher
 {
-  // signal differentiaties the type of event that is happening
-  // preferably use a type that is cheap to copy
-  using signal_type = SignalT;
-  // a handler is an event handler which can take arguments and has NO RETURN VALUE.
-  // see "function.hpp"
-  using handler_type = tmf::callable<void(HandlerArgTs...)>;
-  // this tuple holds the data which will be passed to the handler
+  using signal_type = valid_signal_enum<SignalT>;
+
+  using handler_type = function<void(HandlerArgTs...)>;
+  
   using args_storage_type = std::tuple<arg_storage_t<HandlerArgTs>...>;
-  // a handler chain is a sequence of handlers that will be called consecutively to handle an event.
-  using handler_chain_type = std::vector<std::optional<handler_type>>;
-  // handler id  is a signal and an iterator to a handler packed together to make handler removal easier when calling
-  // "disconnect" globally or from handler base class
+  
+  using handler_chain_type = static_stack<std::optional<handler_type>, signal_type::handler_chain_size>;
+
   struct handler_id_type
   {
     SignalT signal;
     size_t index;
   };
-  // handler map, simply maps signals to their corresponding handler chains
-  using handler_map_type = std::unordered_map<SignalT, handler_chain_type>;
-  // events hold all relevant data to call a handler list
+  
+  using handler_map_type = std::array<handler_chain_type, signal_type::signal_limit>;
+  
   struct event_type
   {
     signal_type signal;
     args_storage_type args;
   };
+  
+  using event_queue_type = static_queue<event_type, signal_type::event_queue_size>;
 
-  // event queue is a modify-able fifo queue that stores events
-  using event_queue_type = std::deque<event_type>;
-
-  // associates a SignalT signal with a callable entity (any lambda, free function, static member function
-  // or function object)
   template<typename HandlerT>
-  static handler_id_type connect(const SignalT& signal, HandlerT&& handler);
+  static handler_id_type connect(SignalT signal_id, HandlerT&& handler);
 
-  // associates a SignalT signal with a callable entity, after binding arguments to it
   template<typename HandlerT, typename... BoundArgTs>
-  static handler_id_type connect_bind(const SignalT& signal, HandlerT&& handler, BoundArgTs&&... bound_args);
+  static handler_id_type connect_bind(SignalT signal_id, HandlerT&& handler, BoundArgTs&&... bound_args);
 
-  // associates a SignalT signal with a member function pointer of a class instance
-  // ClassT must be either a raw pointer or shared_ptr
   template<typename ClassT, typename MemPtrT>
-  static handler_id_type connect_member(const SignalT& signal, ClassT&& object, MemPtrT member);
+  static handler_id_type connect_member(SignalT signal_id, ClassT&& object, MemPtrT member);
 
-  // associates a SignalT signal with a member function pointer of a class instance, after binding arguments to it
-  // ClassT must be either a raw pointer or shared_ptr
   template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
-  static handler_id_type connect_bind_member(const SignalT& signal,
+  static handler_id_type connect_bind_member(SignalT signal_id,
                                              ClassT&& object,
                                              MemPtrT member,
                                              BoundArgTs&&... bound_args);
 
-  // pushes a new event onto the queue with a signal value and arguments, if any
   template<typename... FwdHandlerArgTs>
-  static void push_event(const SignalT& signal, FwdHandlerArgTs&&... args);
+  static bool push_event(SignalT signal_id, FwdHandlerArgTs&&... args);
 
-  // returns the size of the event queue
   static size_t events_pending();
 
-  // handles events and pops them off of the event queue.
-  // the amount can be specified by limit.
-  // if limit is 0, then all events are executed.
-  // returns number of events that were succesfully handled
   static size_t respond(size_t limit = 0);
 
-  //  this removes an event handler from a handler list
   static void disconnect(const handler_id_type& handler_id);
 
-  // this function lets you modify the event queue in a thread aware manner
-  static void update_events(const tmf::callable<void(event_queue_type&)>& updater);
+  static void update_events(const function<void(event_queue_type&)>& updater);
 
 private:
   dispatcher() {}
 
   inline static handler_map_type m_handler_map{};
-  inline static std::unordered_map<SignalT, std::vector<size_t>> m_unused_handler_storage_indices;
   inline static event_queue_type m_event_queue{};
+
+  inline static std::array<static_stack<size_t, signal_type::handler_chain_size>, signal_type::signal_limit> m_unused_handler_indices;
 
   inline static std::atomic<std::uint32_t> m_threads_modifying_handlers{ 0 };
   inline static std::atomic<std::uint32_t> m_threads_pushing_events{ 0 };
@@ -166,26 +95,30 @@ private:
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace handlebars {
+namespace handlebars::fast {
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename HandlerT>
 typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect(const SignalT& signal, HandlerT&& handler)
+dispatcher<SignalT, HandlerArgTs...>::connect(SignalT signal_id, HandlerT&& handler)
 {
+  auto signal = static_cast<size_t>(signal_id);
   m_threads_modifying_handlers += 1;
   while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
   handler_id_type handler_id;
-  if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
-    m_unused_handler_storage_indices[signal].pop_back();
-    m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + handler_id.index, std::in_place, std::forward<HandlerT>(handler));
+  auto& chain = m_handler_map[signal];
+  auto& unused_indices = m_unused_handler_indices[signal];
+  if (unused_indices.size() > 0) {
+    // previous handlers have been disconnected, leaving unintialized gaps in the storage
+    handler_id = { signal, unused_indices[signal].top() };
+    unused_indices[signal].pop();
+    ::new (&chain[handler_id.index]) handler_type{ std::forward<HandlerT>(handler) };
   } else {
-    handler_id = { signal, m_handler_map[signal].size() };
-    m_handler_map[signal].emplace_back(std::in_place, std::forward<HandlerT>(handler));
+    // must be pushed onto the back of handler chain
+    handler_id = { signal, chain.size() };
+    chain.push(std::forward<HandlerT>(handler));
   }
   m_threads_modifying_handlers -= 1;
   return handler_id;
@@ -194,26 +127,27 @@ dispatcher<SignalT, HandlerArgTs...>::connect(const SignalT& signal, HandlerT&& 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename HandlerT, typename... BoundArgTs>
 typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect_bind(const SignalT& signal,
+dispatcher<SignalT, HandlerArgTs...>::connect_bind(SignalT signal_id,
                                                    HandlerT&& handler,
                                                    BoundArgTs&&... bound_args)
 {
+  auto signal = static_cast<size_t>(signal_id);
   m_threads_modifying_handlers += 1;
   while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
   handler_id_type handler_id;
   if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
+    handler_id = std::make_tuple(signal, m_unused_handler_storage_indices[signal].back());
     m_unused_handler_storage_indices[signal].pop_back();
     m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + handler_id.index,
+      m_handler_map[signal].begin() + std::get<1>(handler_id),
       std::in_place,
       [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
         std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
       });
   } else {
-    handler_id = { signal, m_handler_map[signal].size() };
+    handler_id = std::make_tuple(signal, m_handler_map[signal].size());
     m_handler_map[signal].emplace_back(
       std::in_place,
       [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
@@ -227,20 +161,21 @@ dispatcher<SignalT, HandlerArgTs...>::connect_bind(const SignalT& signal,
 template<typename SignalT, typename... HandlerArgTs>
 template<typename ClassT, typename MemPtrT>
 typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect_member(const SignalT& signal, ClassT&& object, MemPtrT member)
+dispatcher<SignalT, HandlerArgTs...>::connect_member(SignalT signal_id, ClassT&& object, MemPtrT member)
 {
+  auto signal = static_cast<size_t>(signal_id);
   m_threads_modifying_handlers += 1;
   while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
   handler_id_type handler_id;
   if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
+    handler_id = std::make_tuple(signal, m_unused_handler_storage_indices[signal].back());
     m_unused_handler_storage_indices[signal].pop_back();
     m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + handler_id.index, std::in_place, std::forward<ClassT>(object), member);
+      m_handler_map[signal].begin() + std::get<1>(handler_id), std::in_place, std::forward<ClassT>(object), member);
   } else {
-    handler_id = { signal, m_handler_map[signal].size() };
+    handler_id = std::make_tuple(signal, m_handler_map[signal].size());
     m_handler_map[signal].emplace_back(std::in_place, std::forward<ClassT>(object), member);
   }
   m_threads_modifying_handlers -= 1;
@@ -250,28 +185,29 @@ dispatcher<SignalT, HandlerArgTs...>::connect_member(const SignalT& signal, Clas
 template<typename SignalT, typename... HandlerArgTs>
 template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
 typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect_bind_member(const SignalT& signal,
+dispatcher<SignalT, HandlerArgTs...>::connect_bind_member(SignalT signal_id,
                                                           ClassT&& object,
                                                           MemPtrT member,
                                                           BoundArgTs&&... bound_args)
 {
+  auto signal = static_cast<size_t>(signal_id);
   m_threads_modifying_handlers += 1;
   while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
   handler_id_type handler_id;
   if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
+    handler_id = std::make_tuple(signal, m_unused_handler_storage_indices[signal].back());
     m_unused_handler_storage_indices[signal].pop_back();
     m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + handler_id.index,
+      m_handler_map[signal].begin() + std::get<1>(handler_id),
       std::in_place,
       [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
         std::apply(function(std::forward<ClassT>(object), member),
                    std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<HandlerArgTs>(args)...)));
       });
   } else {
-    handler_id = { signal, m_handler_map[signal].size() };
+    handler_id = std::make_tuple(signal, m_handler_map[signal].size());
     m_handler_map[signal].emplace_back(
       std::in_place,
       [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
@@ -285,9 +221,10 @@ dispatcher<SignalT, HandlerArgTs...>::connect_bind_member(const SignalT& signal,
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename... FwdHandlerArgTs>
-void
-dispatcher<SignalT, HandlerArgTs...>::push_event(const SignalT& signal, FwdHandlerArgTs&&... args)
+bool
+dispatcher<SignalT, HandlerArgTs...>::push_event(SignalT signal_id, FwdHandlerArgTs&&... args)
 {
+  auto signal = static_cast<size_t>(signal_id);
   m_threads_pushing_events += 1;
   while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
@@ -338,6 +275,8 @@ dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
         }
       }
     }
+    /// auto eqbegin = m_event_queue.begin();
+    /// m_event_queue.erase(eqbegin, eqbegin + progress);
   }
 
   m_threads_responding_to_events -= 1;
@@ -352,15 +291,33 @@ dispatcher<SignalT, HandlerArgTs...>::disconnect(const handler_id_type& handler_
   while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
-  m_handler_map[handler_id.signal][handler_id.index] = std::nullopt;
-  m_unused_handler_storage_indices[handler_id.signal].push_back(handler_id.index);
+
+  auto& chain = m_handler_map[handler_id.signal];
+  auto& unused_indices = m_unused_handler_indices[handler_id.signal];
+  if(handler_id.index == chain.size - 1)
+  {
+    // if handler was at end of chain, just pop it
+    chain.pop();
+  } else {
+    if (unused_indices.size() + 1 >= chain.size())
+    {
+      // if the unused index storage is full, this implies that the handler chain is empty and we may reset the state of both
+      chain.clear();
+      unused_indices.clear();
+    } else {
+      // destroy handler stored in an optional
+      chain[handler_id.index] = std::nullopt;
+      // if handler was in the middle or beginning of chain, store its index to be reused
+      unused_indices.push_back(handler_id.index);
+    }
+  }
   m_threads_modifying_handlers -= 1;
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 void
 dispatcher<SignalT, HandlerArgTs...>::update_events(
-  const tmf::callable<void(typename dispatcher<SignalT, HandlerArgTs...>::event_queue_type&)>& updater)
+  const function<void(typename dispatcher<SignalT, HandlerArgTs...>::event_queue_type&)>& updater)
 {
   m_threads_pushing_events += 1;
   m_threads_responding_to_events += 1;

@@ -1,0 +1,3 @@
+[submodule "callable"]
+	path = callable
+	url = https://github.com/tacticalmelonfarmer/callable

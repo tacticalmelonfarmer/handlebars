@@ -4,5 +4,6 @@ build/
 CMakeFiles/
 Makefile
 .clang-format
+_clang-format
 tests/build/
 tests/
