@@ -1,0 +1,3 @@
+[submodule "ext/callable"]
+	path = ext/callable
+	url = https://github.com/tacticalmelonfarmer/callable
