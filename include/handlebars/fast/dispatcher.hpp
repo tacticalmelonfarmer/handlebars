@@ -3,91 +3,141 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <future>
 #include <optional>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <variant>
-#include <type_traits>
 
-#include "../function.hpp"
-#include "../dispatcher.hpp"
-#include "static_queue.hpp"
+#include <callable.hpp>
 
-namespace handlebars::fast {
+#include <handlebars/dispatcher.hpp>
+#include <handlebars/fast/dispatcher.hpp>
+#include <handlebars/fast/static_queue.hpp>
+#include <handlebars/fast/static_stack.hpp>
 
+namespace tmf::hb::fast {
+
+/*
+ * this class is a set of requirements on a strong enumeration {E}.
+ * these requirements map a constant member to an enum label
+ */
 template<typename E>
 struct valid_signal_enum
 {
-  static constexpr auto signal_limit = static_cast<size_t>(E::signal_limit);
-  static constexpr auto handler_chain_size = static_cast<size_t>(E::handler_chain_size);
-  static constexpr auto event_queue_size = static_cast<size_t>(E::event_queue_size);
+  // how many signal values can be handled?
+  static constexpr auto signal_count = static_cast<size_t>(E::signal_count);
+  // how much extra memory per handler, for storing bound arguments?
+  static constexpr auto handler_bind_limit = static_cast<size_t>(E::handler_bind_limit);
+  // how many active handlers can be assigned to a specific signal value?
+  // requirements!
+  static constexpr auto chain_limit = static_cast<size_t>(E::chain_limit);
+  // how many events can be stored on the queue?
+  static constexpr auto event_limit = static_cast<size_t>(E::event_limit);
+  // how many unfinished jobs can be stored on the queue?
+  static constexpr auto job_limit = static_cast<size_t>(E::job_limit);
+  // how many threads can attempt to push events at the same time?
+  static constexpr auto thread_limit = static_cast<size_t>(E::thread_limit);
   using type = E;
 };
+
+template<typename T0, typename... Ts>
+struct max_size_of
+{
+  // extract the largest type, or the first type if all types are the same size
+  using type = std::
+    conditional_t</*if*/ ((sizeof(T0) >= sizeof(Ts)) && ...), /*then*/ T0, /*else*/ typename max_size_of<Ts...>::type>;
+};
+
+template<typename... CandidateTypes>
+using max_size_of_t = typename max_size_of<CandidateTypes...>::type;
 
 template<typename SignalT, typename... HandlerArgTs>
 struct dispatcher
 {
+  // a thin wrapper around `SignalT` providing compile-time checked type information
   using signal_type = valid_signal_enum<SignalT>;
 
-  using handler_type = function<void(HandlerArgTs...)>;
-  
-  using args_storage_type = std::tuple<arg_storage_t<HandlerArgTs>...>;
-  
-  using handler_chain_type = static_stack<std::optional<handler_type>, signal_type::handler_chain_size>;
+  static constexpr auto handler_capacity = tmf::default_callable_capacity + signal_type::handler_bind_limit;
+  // stored callable used to handle events
+  using handler_type = tmf::callable<void(HandlerArgTs...), handler_capacity>;
 
+  // `tuple` of storage capable types, for each type in `HandlerArgTs...`
+  using args_storage_type = std::tuple<arg_storage_t<HandlerArgTs>...>;
+
+  // `static_stack` of `optional`s of `handler_type`
+  using handler_chain_type = static_stack<std::optional<handler_type>, signal_type::chain_limit>;
+
+  // used to refer to an active event handler, NOTE: YOU MUST RETAIN THIS TO REMOVE SPECIFIC HANDLERS
   struct handler_id_type
   {
-    SignalT signal;
+    size_t signal_int;
     size_t index;
   };
-  
-  using handler_map_type = std::array<handler_chain_type, signal_type::signal_limit>;
-  
+
+  // `array` that maps signal values to `handler_chain`s
+  using handler_map_type = std::array<handler_chain_type, signal_type::signal_count>;
+
+  // an event consisting of a signal and some stored arguments that will be passed to event handlers
   struct event_type
   {
-    signal_type signal;
+    SignalT signal;
     args_storage_type args;
   };
-  
-  using event_queue_type = static_queue<event_type, signal_type::event_queue_size>;
+
+  // a fixed-size FIFO queue to store events
+  using event_queue_type = static_queue<event_type, signal_type::event_limit>;
+
+  static constexpr auto job_capacity = (handler_capacity >= sizeof(event_type) ? handler_capacity : sizeof(event_type));
+  using job_type = tmf::callable<void(), job_capacity>;
+
+  using job_queue_type = static_queue<job_type, signal_type::job_limit>;
 
   template<typename HandlerT>
-  static handler_id_type connect(SignalT signal_id, HandlerT&& handler);
+  static std::future<handler_id_type> connect(const SignalT signal_id, HandlerT&& handler);
 
   template<typename HandlerT, typename... BoundArgTs>
-  static handler_id_type connect_bind(SignalT signal_id, HandlerT&& handler, BoundArgTs&&... bound_args);
+  static std::future<handler_id_type> connect_bind(const SignalT signal_id,
+                                                   HandlerT&& handler,
+                                                   BoundArgTs&&... bound_args);
 
   template<typename ClassT, typename MemPtrT>
-  static handler_id_type connect_member(SignalT signal_id, ClassT&& object, MemPtrT member);
+  static std::future<handler_id_type> connect_member(const SignalT signal_id, ClassT&& object, MemPtrT member);
 
   template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
-  static handler_id_type connect_bind_member(SignalT signal_id,
-                                             ClassT&& object,
-                                             MemPtrT member,
-                                             BoundArgTs&&... bound_args);
+  static std::future<handler_id_type> connect_bind_member(const SignalT signal_id,
+                                                          ClassT&& object,
+                                                          MemPtrT member,
+                                                          BoundArgTs&&... bound_args);
 
   template<typename... FwdHandlerArgTs>
-  static bool push_event(SignalT signal_id, FwdHandlerArgTs&&... args);
+  static std::future<bool> push_event(const SignalT signal_id, FwdHandlerArgTs&&... args);
 
   static size_t events_pending();
 
-  static size_t respond(size_t limit = 0);
+  static size_t respond(size_t count = 0);
 
-  static void disconnect(const handler_id_type& handler_id);
-
-  static void update_events(const function<void(event_queue_type&)>& updater);
+  static void disconnect(const handler_id_type handler_id);
 
 private:
+  static void finish_jobs();
+
   dispatcher() {}
 
   inline static handler_map_type m_handler_map{};
   inline static event_queue_type m_event_queue{};
 
-  inline static std::array<static_stack<size_t, signal_type::handler_chain_size>, signal_type::signal_limit> m_unused_handler_indices;
+  using handler_storage_gaps_type = static_stack<size_t, signal_type::chain_limit>;
+
+  inline static std::array<handler_storage_gaps_type, signal_type::signal_count> m_handler_map_storage_gaps{};
+
+  inline static job_queue_type m_job_queue{};
 
   inline static std::atomic<std::uint32_t> m_threads_modifying_handlers{ 0 };
   inline static std::atomic<std::uint32_t> m_threads_pushing_events{ 0 };
   inline static std::atomic<std::uint32_t> m_threads_responding_to_events{ 0 };
+  inline static std::atomic<bool> m_finishing_jobs{ false };
 };
 }
 
@@ -95,238 +145,387 @@ private:
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace handlebars::fast {
+namespace tmf::hb::fast {
+
+template<typename SignalT, typename... HandlerArgTs>
+void
+dispatcher<SignalT, HandlerArgTs...>::finish_jobs()
+{
+  bool busy = m_finishing_jobs.exchange(true);
+  if (busy == true) {
+    return;
+  }
+  for (auto job = m_job_queue.begin();; ++job) {
+    if (job == m_job_queue.end()) {
+      break;
+    }
+    job->operator()();
+  }
+  m_job_queue.clear();
+  m_finishing_jobs = false;
+}
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename HandlerT>
-typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect(SignalT signal_id, HandlerT&& handler)
+std::future<typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type>
+dispatcher<SignalT, HandlerArgTs...>::connect(const SignalT signal_id, HandlerT&& handler)
 {
-  auto signal = static_cast<size_t>(signal_id);
-  m_threads_modifying_handlers += 1;
-  while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
+  std::promise<handler_id_type> promise{};
+  std::future<handler_id_type> future = promise.get_future();
+
+  auto implementation = [](auto promise, auto signal_id, auto&& handler) mutable -> void {
+    handler_id_type handler_id;
+    auto signal_int = static_cast<size_t>(signal_id);
+    auto& chain = m_handler_map[signal_int];
+    auto& storage_gaps = m_handler_map_storage_gaps[signal_int];
+    // check if storage gaps tracker is full
+    if (storage_gaps.size() > signal_type::handler_chain_capacity) {
+      // TODO: hard error!
+    }
+    if (storage_gaps.size() > 0) {
+      // previous handlers have been disconnected, leaving unintialized gaps in the storage
+      handler_id.signal_int = signal_int;
+      handler_id.index = *(storage_gaps.top());
+      storage_gaps.pop();
+    } else {
+      // must be pushed onto the back of handler chain
+      handler_id.signal_int = signal_int;
+      handler_id.index = chain.size();
+    }
+    chain.push(handler_type{ std::forward<HandlerT>(handler) });
+    // fulfill promise to asynchronous value
+    promise.set_value(handler_id);
+  };
+
+  size_t thread_index = m_threads_modifying_handlers.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+    // check if job queue is full
+    if (m_job_queue.size() == signal_type::job_queue_capacity) {
+      // TODO: hard error!
+    }
+    // push new asynchronous job
+    m_job_queue.push(std::move([implementation, promise = std::move(promise), signal_id, &handler]() mutable {
+      implementation(std::move(promise), signal_id, std::forward<HandlerT>(handler));
+    }));
+  } else { /* only thread on deck */
+    implementation(std::move(promise), signal_id, std::forward<HandlerT>(handler));
   }
-  handler_id_type handler_id;
-  auto& chain = m_handler_map[signal];
-  auto& unused_indices = m_unused_handler_indices[signal];
-  if (unused_indices.size() > 0) {
-    // previous handlers have been disconnected, leaving unintialized gaps in the storage
-    handler_id = { signal, unused_indices[signal].top() };
-    unused_indices[signal].pop();
-    ::new (&chain[handler_id.index]) handler_type{ std::forward<HandlerT>(handler) };
-  } else {
-    // must be pushed onto the back of handler chain
-    handler_id = { signal, chain.size() };
-    chain.push(std::forward<HandlerT>(handler));
+  // decrement thread count, and check if all threads are done so we can finish interrupted jobs
+  if (m_threads_modifying_handlers.fetch_sub(1) == 1) {
+    finish_jobs();
   }
-  m_threads_modifying_handlers -= 1;
-  return handler_id;
+  // return asynchronous value
+  return std::move(future);
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename HandlerT, typename... BoundArgTs>
-typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect_bind(SignalT signal_id,
+std::future<typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type>
+dispatcher<SignalT, HandlerArgTs...>::connect_bind(const SignalT signal_id,
                                                    HandlerT&& handler,
                                                    BoundArgTs&&... bound_args)
 {
-  auto signal = static_cast<size_t>(signal_id);
-  m_threads_modifying_handlers += 1;
-  while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
+  std::promise<handler_id_type> promise{};
+  std::future<handler_id_type> future = promise.get_future();
+
+  auto implementation = [](auto promise, auto signal_id, auto&& handler, auto&&... bound_args) mutable -> void {
+    handler_id_type handler_id;
+    size_t signal_int = static_cast<size_t>(signal_id);
+    auto& chain = m_handler_map[signal_int];
+    auto& storage_gaps = m_handler_map_storage_gaps[signal_int];
+    // check if storage gaps tracker is full
+    if (storage_gaps.size() > signal_type::handler_chain_capacity) {
+      // TODO: hard error!
+    }
+    auto binder = [&handler,
+                   bound_tuple = std::make_tuple(arg_storage_t<decltype((bound_args))>{
+                     std::forward<decltype(bound_args)>(bound_args) }...)](auto&&... args) mutable {
+      std::apply(tmf::callable{ std::forward<decltype(handler)>(handler) },
+                 std::tuple_cat(bound_tuple, args_storage_type{ std::forward<decltype(args)>(args)... }));
+    };
+    if (storage_gaps.size() > 0) {
+      // previous handlers have been disconnected, leaving unintialized gaps in the storage
+      auto& gaps = storage_gaps[signal_int];
+      handler_id = { signal_int, gaps.top() };
+      gaps.pop();
+      ::new (&chain[handler_id.index]) handler_type{ std::move(binder) };
+    } else {
+      // must be pushed onto the back of handler chain
+      handler_id = { signal_int, chain.size() };
+      chain.push(std::move(binder));
+    }
+    promise.set_value(handler_id);
+  };
+
+  size_t thread_index = m_threads_modifying_handlers.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+    // check if job queue is full
+    if (m_job_queue.size() == signal_type::job_queue_capacity) {
+      // TODO: hard error!
+    }
+    // push new asynchronous job
+    m_job_queue.push(std::move([implementation, promise = std::move(promise), signal_id, &handler]() mutable {
+      implementation(std::move(promise), signal_id, std::forward<HandlerT>(handler));
+    }));
+  } else { /* only thread on deck */
+    implementation(std::move(promise), signal_id, std::forward<HandlerT>(handler));
   }
-  handler_id_type handler_id;
-  if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = std::make_tuple(signal, m_unused_handler_storage_indices[signal].back());
-    m_unused_handler_storage_indices[signal].pop_back();
-    m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + std::get<1>(handler_id),
-      std::in_place,
-      [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
-        std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
-      });
-  } else {
-    handler_id = std::make_tuple(signal, m_handler_map[signal].size());
-    m_handler_map[signal].emplace_back(
-      std::in_place,
-      [&, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
-        std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
-      });
+  // decrement thread count, and check if all threads are done so we can finish interrupted jobs
+  if (m_threads_modifying_handlers.fetch_sub(1) == 1) {
+    finish_jobs();
   }
-  m_threads_modifying_handlers -= 1;
-  return handler_id;
+  return std::move(future);
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename ClassT, typename MemPtrT>
-typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect_member(SignalT signal_id, ClassT&& object, MemPtrT member)
+std::future<typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type>
+dispatcher<SignalT, HandlerArgTs...>::connect_member(const SignalT signal_id, ClassT&& object, MemPtrT member)
 {
-  auto signal = static_cast<size_t>(signal_id);
-  m_threads_modifying_handlers += 1;
-  while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
+  std::promise<handler_id_type> promise{};
+  std::future<handler_id_type> future = promise.get_future();
+
+  auto implementation = [](auto promise, auto signal_id, auto&& object, auto member) mutable -> void {
+    handler_id_type handler_id;
+    auto signal_int = static_cast<size_t>(signal_id);
+    auto& chain = m_handler_map[signal_int];
+    auto& storage_gaps = m_handler_map_storage_gaps[signal_int];
+    // check if storage gaps tracker is full
+    if (storage_gaps.size() > signal_type::chain_limit) {
+      // TODO: hard error!
+    }
+    if (storage_gaps.size() > 0) {
+      // previous handlers have been disconnected, leaving unintialized gaps in the storage
+      handler_id.signal_int = signal_int;
+      handler_id.index = *(storage_gaps.top());
+      storage_gaps.pop();
+    } else {
+      // must be pushed onto the back of handler chain
+      handler_id.signal_int = signal_int;
+      handler_id.index = chain.size();
+    }
+    chain.push(handler_type{ std::forward<ClassT>(object), member });
+    // fulfill promise to asynchronous value
+    promise.set_value(handler_id);
+  };
+
+  size_t thread_index = m_threads_modifying_handlers.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+    // check if job queue is full
+    if (m_job_queue.size() == signal_type::job_limit) {
+      // TODO: hard error!
+    }
+    // push new asynchronous job
+    m_job_queue.push(std::move([implementation, promise = std::move(promise), signal_id, &object, member]() mutable {
+      implementation(std::move(promise), signal_id, std::forward<ClassT>(object), member);
+    }));
+  } else { /* only thread on deck */
+    implementation(std::move(promise), signal_id, std::forward<ClassT>(object), member);
   }
-  handler_id_type handler_id;
-  if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = std::make_tuple(signal, m_unused_handler_storage_indices[signal].back());
-    m_unused_handler_storage_indices[signal].pop_back();
-    m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + std::get<1>(handler_id), std::in_place, std::forward<ClassT>(object), member);
-  } else {
-    handler_id = std::make_tuple(signal, m_handler_map[signal].size());
-    m_handler_map[signal].emplace_back(std::in_place, std::forward<ClassT>(object), member);
+  // decrement thread count, and check if all threads are done so we can finish interrupted jobs
+  if (m_threads_modifying_handlers.fetch_sub(1) == 1) {
+    finish_jobs();
   }
-  m_threads_modifying_handlers -= 1;
-  return handler_id;
+  // return asynchronous value
+  return std::move(future);
 }
 
 template<typename SignalT, typename... HandlerArgTs>
-template<typename ClassT, typename MemPtrT, typename... BoundArgTs>
-typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
-dispatcher<SignalT, HandlerArgTs...>::connect_bind_member(SignalT signal_id,
+template<typename ClassT, typename MemPtrT, typename... FwdBoundArgTs>
+std::future<typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type>
+dispatcher<SignalT, HandlerArgTs...>::connect_bind_member(const SignalT signal_id,
                                                           ClassT&& object,
                                                           MemPtrT member,
-                                                          BoundArgTs&&... bound_args)
+                                                          FwdBoundArgTs&&... bound_args)
 {
-  auto signal = static_cast<size_t>(signal_id);
-  m_threads_modifying_handlers += 1;
-  while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
+  std::promise<handler_id_type> promise{};
+  std::future<handler_id_type> future = promise.get_future();
+
+  auto implementation =
+    [](auto promise, auto signal_id, auto&& object, auto member, auto&&... bound_args) mutable -> void {
+    handler_id_type handler_id;
+    size_t signal_int = static_cast<size_t>(signal_id);
+    auto& chain = m_handler_map[signal_int];
+    auto& storage_gaps = m_handler_map_storage_gaps[signal_int];
+    // check if storage gaps tracker is full
+    if (storage_gaps.size() > signal_type::handler_chain_capacity) {
+      // TODO: hard error!
+    }
+    auto binder = [&object,
+                   member,
+                   bound_tuple = std::make_tuple(arg_storage_t<decltype((bound_args))>{
+                     std::forward<decltype(bound_args)>(bound_args) }...)](auto&&... args) mutable {
+      std::apply(tmf::callable{ std::forward<decltype(object)>(object), member },
+                 std::tuple_cat(bound_tuple, args_storage_type{ std::forward<decltype(args)>(args)... }));
+    };
+    if (storage_gaps.size() > 0) {
+      // previous handlers have been disconnected, leaving unintialized gaps in the storage
+      auto& gaps = storage_gaps[signal_int];
+      handler_id = { signal_int, gaps.top() };
+      gaps.pop();
+      ::new (&chain[handler_id.index]) handler_type{ std::move(binder) };
+    } else {
+      // must be pushed onto the back of handler chain
+      handler_id = { signal_int, chain.size() };
+      chain.push(std::move(binder));
+    }
+    promise.set_value(handler_id);
+  };
+
+  size_t thread_index = m_threads_modifying_handlers.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+    // check if job queue is full
+    if (m_job_queue.size() == signal_type::job_queue_capacity) {
+      // TODO: hard error!
+    }
+    // push new asynchronous job
+    m_job_queue.push(std::move([implementation, promise = std::move(promise), signal_id, &object, member]() mutable {
+      implementation(std::move(promise), signal_id, std::forward<ClassT>(object), member);
+    }));
+  } else { /* only thread on deck */
+    implementation(std::move(promise), signal_id, std::forward<ClassT>(object), member);
   }
-  handler_id_type handler_id;
-  if (m_unused_handler_storage_indices[signal].size() > 0) {
-    handler_id = std::make_tuple(signal, m_unused_handler_storage_indices[signal].back());
-    m_unused_handler_storage_indices[signal].pop_back();
-    m_handler_map[signal].emplace(
-      m_handler_map[signal].begin() + std::get<1>(handler_id),
-      std::in_place,
-      [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
-        std::apply(function(std::forward<ClassT>(object), member),
-                   std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<HandlerArgTs>(args)...)));
-      });
-  } else {
-    handler_id = std::make_tuple(signal, m_handler_map[signal].size());
-    m_handler_map[signal].emplace_back(
-      std::in_place,
-      [=, bound_tuple = std::forward_as_tuple(std::forward<BoundArgTs>(bound_args)...)](HandlerArgTs&&... args) {
-        std::apply(function(std::forward<ClassT>(object), member),
-                   std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<HandlerArgTs>(args)...)));
-      });
+  // decrement thread count, and check if all threads are done so we can finish interrupted jobs
+  if (m_threads_modifying_handlers.fetch_sub(1) == 1) {
+    finish_jobs();
   }
-  m_threads_modifying_handlers -= 1;
-  return handler_id;
+  return std::move(future);
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename... FwdHandlerArgTs>
-bool
-dispatcher<SignalT, HandlerArgTs...>::push_event(SignalT signal_id, FwdHandlerArgTs&&... args)
+std::future<bool>
+dispatcher<SignalT, HandlerArgTs...>::push_event(const SignalT signal_id, FwdHandlerArgTs&&... args)
 {
-  auto signal = static_cast<size_t>(signal_id);
-  m_threads_pushing_events += 1;
-  while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
+  std::promise<bool> promise{};
+  std::future<bool> future = promise.get_future();
+
+  auto implementation = [](auto promise, auto signal_id, auto&& args_tuple) mutable -> void {
+    promise.set_value(m_event_queue.push(event_type{ signal_id, std::forward<decltype(args_tuple)>(args_tuple) }));
+  };
+
+  size_t thread_index = m_threads_pushing_events.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+    // check if job queue is full
+    if (m_job_queue.size() == signal_type::job_limit) {
+      // TODO: hard error!
+    }
+    m_job_queue.push(std::move([implementation,
+                                promise = std::move(promise),
+                                signal_id,
+                                args_tuple = args_storage_type{ std::forward<FwdHandlerArgTs>(args)... }]() mutable {
+      implementation(std::move(promise), signal_id, std::move(args_tuple));
+    }));
+  } else { /* only thread on deck */
+    implementation(std::move(promise), signal_id, args_storage_type{ std::forward<FwdHandlerArgTs>(args)... });
   }
-  m_event_queue.emplace_back(event_type{
-    signal, std::forward_as_tuple(static_cast<arg_storage_t<HandlerArgTs>>(std::forward<FwdHandlerArgTs>(args))...) });
-  m_threads_pushing_events -= 1;
+  // decrement thread count, and check if all threads are done so we can finish interrupted jobs
+  if (m_threads_pushing_events.fetch_sub(1) == 1) {
+    finish_jobs();
+  }
+  return std::move(future);
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 size_t
 dispatcher<SignalT, HandlerArgTs...>::events_pending()
 {
-  size_t qsize = m_event_queue.size();
-  return qsize;
+  return m_event_queue.size();
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 size_t
-dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
+dispatcher<SignalT, HandlerArgTs...>::respond(size_t count)
 {
-  m_threads_responding_to_events += 1;
-  if (m_threads_responding_to_events.load(std::memory_order_relaxed) > 1) {
-    return 0; // here we have a non-fatal error, we are already responding to events
-  }
-
-  size_t progress = 0;
-
-  if (limit == 0) { // respond to an unlimited amount of events
-    for (auto&& e : m_event_queue) {
-      for (auto&& h : m_handler_map[e.signal]) {
-        if (h.has_value()) {
-          std::apply(h.value(), e.args);
-        }
-      }
-    }
-    m_event_queue.clear();
-  } else { // respond to a limited amount of events
-    for (auto&& e : m_event_queue) {
-      for (auto&& h : m_handler_map[e.signal]) {
-        if (h.has_value()) {
-          std::apply(h.value(), e.args);
-          m_event_queue.pop_front();
-        }
-        ++progress;
-        if (progress == limit) {
+  size_t thread_index = m_threads_responding_to_events.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+                          // TODO: hard error!
+  } else {                /* only thread on deck */
+    size_t progress = 0;
+    if (count == 0) { // respond to an uncounted amount of events
+      for (auto e = m_event_queue.begin();; ++e) {
+        // in order to respond to events pushed concurrently, we explicitly check `.end()` every iteration
+        if (e == m_event_queue.end()) {
           break;
         }
+        for (auto h = m_handler_map[static_cast<size_t>(e->signal)].begin();; ++h) {
+          // again, in order to respond to events pushed concurrently, we explicitly check `.end()` every iteration
+          if (h == m_handler_map[static_cast<size_t>(e->signal)].end()) {
+            break;
+          }
+          if (h->has_value()) {
+            std::apply(h->value(), e->args);
+          }
+        }
+      }
+      m_event_queue.clear();
+    } else { // respond to a counted amount of events
+      for (auto e = m_event_queue.begin();; ++e) {
+        // in order to respond to events pushed concurrently, we explicitly check `.end()` every iteration
+        if (e == m_event_queue.end()) {
+          break;
+        }
+        for (auto h = m_handler_map[static_cast<size_t>(e->signal)].begin();; ++h) {
+          // again, in order to respond to events pushed concurrently, we explicitly check `.end()` every iteration
+          if (e == m_event_queue.end()) {
+            break;
+          }
+          if (h->has_value()) {
+            std::apply(h->value(), e->args);
+            m_event_queue.pop();
+          }
+          ++progress;
+          if (progress == count) {
+            break;
+          }
+        }
       }
     }
-    /// auto eqbegin = m_event_queue.begin();
-    /// m_event_queue.erase(eqbegin, eqbegin + progress);
+    // decrement thread count
+    --m_threads_responding_to_events;
+    return m_event_queue.size();
   }
-
-  m_threads_responding_to_events -= 1;
-  return progress;
+  return 0;
 }
 
 template<typename SignalT, typename... HandlerArgTs>
 void
-dispatcher<SignalT, HandlerArgTs...>::disconnect(const handler_id_type& handler_id)
+dispatcher<SignalT, HandlerArgTs...>::disconnect(const handler_id_type handler_id)
 {
-  m_threads_modifying_handlers += 1;
-  while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
-  }
-
-  auto& chain = m_handler_map[handler_id.signal];
-  auto& unused_indices = m_unused_handler_indices[handler_id.signal];
-  if(handler_id.index == chain.size - 1)
-  {
-    // if handler was at end of chain, just pop it
-    chain.pop();
-  } else {
-    if (unused_indices.size() + 1 >= chain.size())
-    {
-      // if the unused index storage is full, this implies that the handler chain is empty and we may reset the state of both
-      chain.clear();
-      unused_indices.clear();
+  auto implementation = [](auto handler_id) mutable {
+    auto& chain = m_handler_map[handler_id.signal_int];
+    auto& storage_gaps = m_handler_map_storage_gaps[handler_id.signal_int];
+    if (handler_id.index == chain.size() - 1) {
+      // if handler was at end of chain, just pop it
+      chain.pop();
     } else {
-      // destroy handler stored in an optional
-      chain[handler_id.index] = std::nullopt;
-      // if handler was in the middle or beginning of chain, store its index to be reused
-      unused_indices.push_back(handler_id.index);
+      if (storage_gaps.size() + 1 >= chain.size()) {
+        // if the unused index storage is full, this implies that the handler chain is empty and we may reset the state
+        // of both
+        chain.clear();
+        storage_gaps.clear();
+      } else {
+        // destroy handler stored in an optional
+        *chain[handler_id.index] = std::nullopt;
+        // if handler was in the middle or beginning of chain, store its index to be reused
+        storage_gaps.push(handler_id.index);
+      }
     }
-  }
-  m_threads_modifying_handlers -= 1;
-}
+  };
 
-template<typename SignalT, typename... HandlerArgTs>
-void
-dispatcher<SignalT, HandlerArgTs...>::update_events(
-  const function<void(typename dispatcher<SignalT, HandlerArgTs...>::event_queue_type&)>& updater)
-{
-  m_threads_pushing_events += 1;
-  m_threads_responding_to_events += 1;
-  while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1 ||
-         m_threads_responding_to_events.load(std::memory_order_relaxed) > 1) {
-    // BLOCK EXECUTION
+  size_t thread_index = m_threads_modifying_handlers.fetch_add(1);
+  if (thread_index > 0) { /* multiple threads on deck */
+    // check if job queue is full
+    if (m_job_queue.size() > signal_type::thread_limit) {
+      // TODO: hard error!
+    }
+    m_job_queue.push([implementation, handler_id]() mutable { implementation(handler_id); });
+  } else { /* only thread on deck */
+    implementation(handler_id);
   }
-  updater(m_event_queue);
-  m_threads_pushing_events -= 1;
-  m_threads_responding_to_events -= 1;
+  // decrement thread count, and check if all threads are done so we can finish interrupted jobs
+  if (m_threads_modifying_handlers.fetch_sub(1) == 1) {
+    finish_jobs();
+  }
 }
 }

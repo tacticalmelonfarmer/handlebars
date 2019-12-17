@@ -1,9 +1,5 @@
 .vs/
 .vscode/
 build/
-CMakeFiles/
-Makefile
+out/
 .clang-format
-_clang-format
-tests/build/
-tests/

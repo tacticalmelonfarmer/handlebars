@@ -6,7 +6,7 @@
 
 #include "dispatcher.hpp"
 
-namespace handlebars {
+namespace tmf::hb {
 
 // handles is a crtp style class which turns the derived class into a container for event handlers
 // and exposes some convenience functions
@@ -85,8 +85,8 @@ handles<DerivedT, SignalT, HandlerArgTs...>::respond(size_t limit)
 template<typename DerivedT, typename SignalT, typename... HandlerArgTs>
 handles<DerivedT, SignalT, HandlerArgTs...>::~handles()
 {
-  for (auto& handle : m_handlers) {
-    dispatcher<SignalT, HandlerArgTs...>::disconnect(handle);
+  for (auto&& id : m_handlers) {
+    dispatcher<SignalT, HandlerArgTs...>::disconnect(id);
   }
 }
 }

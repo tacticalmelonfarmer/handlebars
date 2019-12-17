@@ -1,35 +1,36 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.10)
 
-project(handlebars LANGUAGES CXX)
+project(handlebars)
 
-add_subdirectory(callable)
+add_subdirectory(ext/callable)
 
-find_package(Threads)
-add_library(handlebars INTERFACE)
-target_compile_features(handlebars INTERFACE cxx_std_17)
-target_include_directories(handlebars INTERFACE include)
-target_link_libraries(handlebars INTERFACE callable Threads::Threads)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+add_library(libhandlebars INTERFACE)
+target_compile_features(libhandlebars INTERFACE cxx_std_17)
+target_include_directories(libhandlebars INTERFACE include)
+target_link_libraries(libhandlebars INTERFACE libcallable Threads::Threads)
 
-add_executable(logger example/logger/main.cpp)
-target_link_libraries(logger handlebars)
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-    target_link_libraries(logger stdc++fs)
-endif()
+add_executable(arithmetic examples/easy/arithmetic/main.cpp)
+target_link_libraries(arithmetic libhandlebars)
+### fast version
+add_executable(fast_arithmetic examples/fast/arithmetic/main.cpp)
+target_link_libraries(fast_arithmetic libhandlebars)
 
-add_executable(edgewise example/edgewise/main.cpp)
-target_link_libraries(edgewise handlebars)
+add_executable(edgewise examples/easy/edgewise/main.cpp)
+target_link_libraries(edgewise libhandlebars)
 
-add_executable(arithmetic example/arithmetic/main.cpp)
-target_link_libraries(arithmetic handlebars)
+add_executable(logger examples/easy/logger/main.cpp)
+target_link_libraries(logger libhandlebars)
 
-add_executable(ordered example/ordered/main.cpp)
-target_link_libraries(ordered handlebars)
+add_executable(lvalues examples/easy/lvalues/main.cpp)
+target_link_libraries(lvalues libhandlebars)
 
-add_executable(repl example/repl/main.cpp)
-target_link_libraries(repl handlebars)
+add_executable(ordered examples/easy/ordered/main.cpp)
+target_link_libraries(ordered libhandlebars)
 
-add_executable(rvalues example/rvalues/main.cpp)
-target_link_libraries(rvalues handlebars)
+add_executable(repl examples/easy/repl/main.cpp)
+target_link_libraries(repl libhandlebars)
 
-add_executable(lvalues example/lvalues/main.cpp)
-target_link_libraries(lvalues handlebars)
+add_executable(rvalues examples/easy/rvalues/main.cpp)
+target_link_libraries(rvalues libhandlebars)

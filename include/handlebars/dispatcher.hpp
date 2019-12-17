@@ -12,21 +12,43 @@
 
 #include <callable.hpp>
 
-namespace handlebars {
+namespace tmf::hb {
 
 inline namespace detail {
 
 template<typename T>
-struct special_ref
+struct fake_rval
 {
-  constexpr special_ref(T&& ref)
-    : m_ref(std::move(ref))
+  fake_rval()
+    : m_val{ std::nullopt }
   {}
-  constexpr special_ref(const T& ref)
-    : m_ref(&ref)
+  fake_rval(T&& ref)
+    : m_val{ std::move(ref) }
+  {}
+  fake_rval(const T& ref)
+    : m_val{ ref }
   {}
 
-  constexpr operator const T&() const
+  operator T() const { return T{ m_val.value() }; }
+
+private:
+  std::optional<T> m_val;
+};
+
+template<typename T>
+struct wrapped_const_ref
+{
+  wrapped_const_ref()
+    : m_ref{ nullptr }
+  {}
+  wrapped_const_ref(T&& ref)
+    : m_ref{ std::move(ref) }
+  {}
+  wrapped_const_ref(const T& ref)
+    : m_ref{ &ref }
+  {}
+
+  operator const T&() const
   {
     if (std::holds_alternative<const T*>(m_ref)) {
       return *std::get<const T*>(m_ref);
@@ -40,16 +62,19 @@ private:
 };
 
 template<typename T>
-struct fake_rval
+struct wrapped_ref
 {
-  constexpr fake_rval(T&& ref)
-    : m_val(std::move(ref))
+  wrapped_ref()
+    : m_ref{ nullptr }
+  {}
+  wrapped_ref(T& ref)
+    : m_ref{ &ref }
   {}
 
-  constexpr operator T() const { return T{ m_val }; }
+  operator T&() { return *m_ref; }
 
 private:
-  T m_val;
+  T* m_ref;
 };
 
 template<typename T>
@@ -65,12 +90,12 @@ struct arg_storage<T&&>
 template<typename T>
 struct arg_storage<const T&>
 {
-  using type = special_ref<T>;
+  using type = wrapped_const_ref<T>;
 };
 template<typename T>
 struct arg_storage<T&>
 {
-  using type = T&;
+  using type = wrapped_ref<T>;
 };
 template<typename T>
 using arg_storage_t = typename arg_storage<T>::type;
@@ -166,7 +191,7 @@ private:
 /////////////////////////////////////////////////Implementation//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace handlebars {
+namespace tmf::hb {
 
 template<typename SignalT, typename... HandlerArgTs>
 template<typename HandlerT>
@@ -292,8 +317,7 @@ dispatcher<SignalT, HandlerArgTs...>::push_event(const SignalT& signal, FwdHandl
   while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1) {
     // BLOCK EXECUTION
   }
-  m_event_queue.emplace_back(event_type{
-    signal, std::forward_as_tuple(static_cast<arg_storage_t<HandlerArgTs>>(std::forward<FwdHandlerArgTs>(args))...) });
+  m_event_queue.emplace_back(event_type{ signal, args_storage_type{ std::forward<FwdHandlerArgTs>(args)... } });
   m_threads_pushing_events -= 1;
 }
 
