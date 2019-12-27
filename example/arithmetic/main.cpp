@@ -16,23 +16,27 @@ struct arithmetic : public handlebars::handles<arithmetic, op, double&, const do
 {
   void add(double& a, const double& b)
   {
+    std::cout << a << " + " << b << " = ";
     a = a + b;
-    std::cout << "add\n";
+    std::cout << a << std::endl;
   }
   void subtract(double& a, const double& b)
   {
+    std::cout << a << " - " << b << " = ";
     a = a - b;
-    std::cout << "subtract\n";
+    std::cout << a << std::endl;
   }
   void multiply(double& a, const double& b)
   {
+    std::cout << a << " * " << b << " = ";
     a = a * b;
-    std::cout << "multiply\n";
+    std::cout << a << std::endl;
   }
   void divide(double& a, const double& b)
   {
+    std::cout << a << " / " << b << " = ";
     a = a / b;
-    std::cout << "divide\n";
+    std::cout << a << std::endl;
   }
 
   arithmetic()
@@ -56,6 +60,6 @@ main()
   handler.push_event(op::multiply, a, 10.0);
   handler.push_event(op::divide, a, 2.0);
   dispatcher::respond();
-  std::cout << a; // 7.5
+  std::cout << a;
   return 0;
 }
