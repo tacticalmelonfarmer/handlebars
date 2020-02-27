@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <queue>
@@ -74,7 +73,7 @@ namespace handlebars {
 
 						operator T& ()
 						{
-								return *m_ref;
+								return (*m_ref);
 						}
 
 				private:
@@ -184,10 +183,6 @@ namespace handlebars {
 				inline static handler_map_type m_handler_map{};
 				inline static std::unordered_map<SignalT, std::vector<size_t>> m_unused_handler_storage_indices;
 				inline static event_queue_type m_event_queue{};
-
-				inline static std::atomic<std::uint32_t> m_threads_modifying_handlers{ 0 };
-				inline static std::atomic<std::uint32_t> m_threads_pushing_events{ 0 };
-				inline static std::atomic<std::uint32_t> m_threads_responding_to_events{ 0 };
 		};
 }
 
@@ -202,10 +197,6 @@ namespace handlebars {
 		typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
 				dispatcher<SignalT, HandlerArgTs...>::connect(const SignalT& signal, HandlerT&& handler)
 		{
-				m_threads_modifying_handlers += 1;
-				while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				handler_id_type handler_id;
 				if (m_unused_handler_storage_indices[signal].size() > 0) {
 						handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
@@ -217,7 +208,6 @@ namespace handlebars {
 						handler_id = { signal, m_handler_map[signal].size() };
 						m_handler_map[signal].emplace_back(std::in_place, std::forward<HandlerT>(handler));
 				}
-				m_threads_modifying_handlers -= 1;
 				return handler_id;
 		}
 
@@ -228,10 +218,6 @@ namespace handlebars {
 						HandlerT&& handler,
 						BoundArgTs&&... bound_args)
 		{
-				m_threads_modifying_handlers += 1;
-				while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				handler_id_type handler_id;
 				if (m_unused_handler_storage_indices[signal].size() > 0) {
 						handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
@@ -251,7 +237,6 @@ namespace handlebars {
 								std::apply(handler, std::tuple_cat(bound_tuple, std::make_tuple(std::forward<HandlerArgTs>(args)...)));
 						});
 				}
-				m_threads_modifying_handlers -= 1;
 				return handler_id;
 		}
 
@@ -260,10 +245,6 @@ namespace handlebars {
 		typename dispatcher<SignalT, HandlerArgTs...>::handler_id_type
 				dispatcher<SignalT, HandlerArgTs...>::connect_member(const SignalT& signal, ClassT&& object, MemPtrT member)
 		{
-				m_threads_modifying_handlers += 1;
-				while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				handler_id_type handler_id;
 				if (m_unused_handler_storage_indices[signal].size() > 0) {
 						handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
@@ -275,7 +256,6 @@ namespace handlebars {
 						handler_id = { signal, m_handler_map[signal].size() };
 						m_handler_map[signal].emplace_back(std::in_place, std::forward<ClassT>(object), member);
 				}
-				m_threads_modifying_handlers -= 1;
 				return handler_id;
 		}
 
@@ -287,10 +267,6 @@ namespace handlebars {
 						MemPtrT member,
 						BoundArgTs&&... bound_args)
 		{
-				m_threads_modifying_handlers += 1;
-				while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				handler_id_type handler_id;
 				if (m_unused_handler_storage_indices[signal].size() > 0) {
 						handler_id = { signal, m_unused_handler_storage_indices[signal].back() };
@@ -312,7 +288,6 @@ namespace handlebars {
 										std::tuple_cat(bound_tuple, std::forward_as_tuple(std::forward<HandlerArgTs>(args)...)));
 						});
 				}
-				m_threads_modifying_handlers -= 1;
 				return handler_id;
 		}
 
@@ -321,13 +296,8 @@ namespace handlebars {
 		void
 				dispatcher<SignalT, HandlerArgTs...>::push_event(const SignalT& signal, FwdHandlerArgTs&&... args)
 		{
-				m_threads_pushing_events += 1;
-				while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				m_event_queue.emplace_back(event_type{
-						signal, args_storage_type{std::forward<FwdHandlerArgTs>(args)...} });
-				m_threads_pushing_events -= 1;
+						signal, args_storage_type{ std::forward<FwdHandlerArgTs>(args)... } });
 		}
 
 		template<typename SignalT, typename... HandlerArgTs>
@@ -342,16 +312,11 @@ namespace handlebars {
 		size_t
 				dispatcher<SignalT, HandlerArgTs...>::respond(size_t limit)
 		{
-				m_threads_responding_to_events += 1;
-				if (m_threads_responding_to_events.load(std::memory_order_relaxed) > 1) {
-						return 0; // here we have a non-fatal error, we are already responding to events
-				}
-
 				size_t progress = 0;
 
 				if (limit == 0) { // respond to an unlimited amount of events
-						for (auto&& e : m_event_queue) {
-								for (auto&& h : m_handler_map[e.signal]) {
+						for (auto& e : m_event_queue) {
+								for (auto& h : m_handler_map[e.signal]) {
 										if (h.has_value()) {
 												std::apply(h.value(), e.args);
 										}
@@ -360,8 +325,8 @@ namespace handlebars {
 						m_event_queue.clear();
 				}
 				else { // respond to a limited amount of events
-						for (auto&& e : m_event_queue) {
-								for (auto&& h : m_handler_map[e.signal]) {
+						for (auto& e : m_event_queue) {
+								for (auto& h : m_handler_map[e.signal]) {
 										if (h.has_value()) {
 												std::apply(h.value(), e.args);
 												m_event_queue.pop_front();
@@ -373,8 +338,6 @@ namespace handlebars {
 								}
 						}
 				}
-
-				m_threads_responding_to_events -= 1;
 				return progress;
 		}
 
@@ -382,13 +345,8 @@ namespace handlebars {
 		void
 				dispatcher<SignalT, HandlerArgTs...>::disconnect(const handler_id_type& handler_id)
 		{
-				m_threads_modifying_handlers += 1;
-				while (m_threads_modifying_handlers.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				m_handler_map[handler_id.signal][handler_id.index] = std::nullopt;
 				m_unused_handler_storage_indices[handler_id.signal].push_back(handler_id.index);
-				m_threads_modifying_handlers -= 1;
 		}
 
 		template<typename SignalT, typename... HandlerArgTs>
@@ -396,14 +354,6 @@ namespace handlebars {
 				dispatcher<SignalT, HandlerArgTs...>::update_events(
 						const tmf::callable<void(typename dispatcher<SignalT, HandlerArgTs...>::event_queue_type&)>& updater)
 		{
-				m_threads_pushing_events += 1;
-				m_threads_responding_to_events += 1;
-				while (m_threads_pushing_events.load(std::memory_order_relaxed) > 1 ||
-						m_threads_responding_to_events.load(std::memory_order_relaxed) > 1) {
-						// BLOCK EXECUTION
-				}
 				updater(m_event_queue);
-				m_threads_pushing_events -= 1;
-				m_threads_responding_to_events -= 1;
 		}
 }

@@ -8,3 +8,4 @@ _clang-format
 tests/build/
 tests/
 out/
+/CMakeSettings.json
